@@ -32,12 +32,44 @@ except ImportError:
     SCIPY_AVAILABLE = False
 
 # ============================================
+# SAFE COLOR RESOLVER (FIXES PALETTE KEYERROR)
+# ============================================
+
+def get_safe_colors(palette_name, n_colors):
+    """Maps UI palette names to valid seaborn/matplotlib color lists."""
+    palette_map = {
+        "colorblind": "colorblind",
+        "tab10": "tab10",
+        "tab20": "tab20",
+        "Set1": "Set1",
+        "Set2": "Set2",
+        "Set3": "Set3",
+        "pastel": "pastel",
+        "muted": "muted",
+        "dark": "dark",
+        "bright": "bright",
+        "viridis": "viridis",
+        "plasma": "plasma",
+        "cividis": "cividis",
+        "flare": "flare",
+        "crest": "crest",
+        "mako": "mako",
+        "Wong (High-Contrast)": "deep",
+        "Publication Standard": "muted"
+    }
+    safe_name = palette_map.get(palette_name, "viridis")
+    try:
+        return sns.color_palette(safe_name, n_colors)
+    except ValueError:
+        return sns.color_palette("viridis", n_colors)
+
+# ============================================
 # PAGE CONFIGURATION & STYLING ENGINE
 # ============================================
 
 st.set_page_config(page_title="ICP-AES Publication Graphs", layout="wide", page_icon="📊")
 
-def apply_matplotlib_styling(font_family, font_style, font_size, publication_style, color_palette):
+def apply_matplotlib_styling(font_family, font_style, font_size, publication_style):
     try:
         plt.rcParams['font.family'] = font_family
     except Exception:
@@ -160,11 +192,11 @@ def create_lac_1m():
     })
 
 # ============================================
-# HELPER FUNCTIONS (FIXED)
+# HELPER FUNCTIONS
 # ============================================
 
 def get_grouped_data(df, group_by_prefix=False):
-    """Return data with optional grouping. Completely rewritten to avoid column collisions."""
+    """Return data with optional grouping. Robust dictionary builder prevents column collisions."""
     if not group_by_prefix:
         return df.copy()
         
@@ -178,7 +210,6 @@ def get_grouped_data(df, group_by_prefix=False):
     
     val_cols = [c for c in df_g.columns if not c.endswith('_err') and c not in ['Sample', 'Group']]
     
-    # Manual dictionary builder prevents pandas column duplication & shape mismatch bugs
     result_data = {'Sample': []}
     for c in val_cols:
         result_data[c] = []
@@ -189,7 +220,6 @@ def get_grouped_data(df, group_by_prefix=False):
         for c in val_cols:
             vals = group_df[c].dropna()
             result_data[c].append(vals.mean() if len(vals) > 0 else 0.0)
-            
             err_col = f'{c}_err'
             if err_col in group_df.columns:
                 errs = group_df[err_col].dropna()
@@ -231,7 +261,7 @@ def plot_grouped_bars_matplotlib(df, elements, title, ylabel, font_size, color_p
     width = 0.8 / len(elements) if len(elements) > 0 else 0.8
     
     fig, ax = plt.subplots(figsize=(13, 7))
-    colors = sns.color_palette(color_palette, len(elements))
+    colors = get_safe_colors(color_palette, len(elements))
     
     for i, element in enumerate(elements):
         if element in df.columns:
@@ -239,7 +269,6 @@ def plot_grouped_bars_matplotlib(df, elements, title, ylabel, font_size, color_p
             err_col = f'{element}_err'
             errors = np.asarray(df[err_col].values).ravel() if err_col in df.columns else np.zeros_like(values)
             
-            # Ensure exact shape matching to prevent broadcast errors
             if len(values) != len(x):
                 continue
                 
@@ -266,7 +295,7 @@ def plot_scatter_plot(df, x_element, y_element, font_size, group_by=False):
     
     groups = df['Sample'].str.extract(r'(CH|PH|CNH|PNH)')[0].fillna('Unknown')
     unique_groups = groups.unique()
-    colors = sns.color_palette("colorblind", len(unique_groups))
+    colors = get_safe_colors("colorblind", len(unique_groups))
     
     for group, color in zip(unique_groups, colors):
         mask = groups == group
@@ -308,7 +337,7 @@ def plot_radar_chart(df, sample_names, elements, font_size, group_by=False):
     fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(projection='polar'))
     angles = np.linspace(0, 2 * np.pi, len(elements), endpoint=False).tolist()
     angles += angles[:1]
-    colors = sns.color_palette("tab10", len(sample_names))
+    colors = get_safe_colors("tab10", len(sample_names))
     
     for idx, sample in enumerate(sample_names):
         if sample in df['Sample'].values:
@@ -470,7 +499,8 @@ with col_f2:
 font_style = st.sidebar.selectbox("Font Weight/Style", ["Normal", "Bold", "Italic", "Bold-Italic"])
 color_palettes = [
     "colorblind", "tab10", "tab20", "Set1", "Set2", "Set3", "pastel", "muted", 
-    "dark", "bright", "viridis", "plasma", "cividis", "flare", "crest", "mako"
+    "dark", "bright", "viridis", "plasma", "cividis", "flare", "crest", "mako",
+    "Wong (High-Contrast)", "Publication Standard"
 ]
 color_palette = st.sidebar.selectbox("Color Palette", color_palettes)
 publication_style = st.sidebar.toggle("Publication Quality Mode", value=True, 
@@ -492,7 +522,7 @@ df_lac_7d = create_lac_7d()
 df_lac_1m = create_lac_1m()
 
 # Apply styling globally
-apply_matplotlib_styling(font_family, font_style, font_size, publication_style, color_palette)
+apply_matplotlib_styling(font_family, font_style, font_size, publication_style)
 
 # TABS
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
@@ -622,7 +652,9 @@ with tab3:
         if sel:
             fig, ax = plt.subplots(figsize=(13, 7))
             df_plot = df_mod.set_index('Sample')[sel]
-            df_plot.plot(kind='bar', stacked=True, ax=ax, colormap=color_palette, edgecolor='black', linewidth=0.5)
+            # FIXED: Uses safe color list instead of invalid colormap string
+            safe_colors = get_safe_colors(color_palette, len(df_plot.columns))
+            df_plot.plot(kind='bar', stacked=True, ax=ax, color=safe_colors, edgecolor='black', linewidth=0.5)
             ax.set_ylabel('Concentration (mg/L)', fontsize=font_size, fontweight='bold')
             ax.set_title(f'Stacked Composition: {timepoint}', fontsize=font_size+2, fontweight='bold')
             ax.tick_params(axis='x', rotation=45)
@@ -635,8 +667,10 @@ with tab3:
         sel = st.multiselect("Elements", elements_mod, default=['Co', 'Cr'])
         if sel:
             fig, ax = plt.subplots(figsize=(13, 6))
-            for el in sel:
-                ax.plot(df_mod['Sample'], df_mod[el], marker='o', label=el, linewidth=2.5, markersize=8, markeredgecolor='black')
+            safe_colors = get_safe_colors(color_palette, len(sel))
+            for idx, el in enumerate(sel):
+                ax.plot(df_mod['Sample'], df_mod[el], marker='o', label=el, 
+                        color=safe_colors[idx], linewidth=2.5, markersize=8, markeredgecolor='black')
             ax.set_ylabel('Concentration (mg/L)', fontsize=font_size, fontweight='bold')
             ax.set_title(f'Trend Analysis: {timepoint}', fontsize=font_size+2, fontweight='bold')
             ax.tick_params(axis='x', rotation=45)
@@ -648,7 +682,8 @@ with tab3:
     elif viz_type == "Element Stacking %":
         df_pct = df_mod[elements_mod].div(df_mod[elements_mod].sum(axis=1), axis=0) * 100
         fig, ax = plt.subplots(figsize=(13, 7))
-        df_pct.plot(kind='bar', stacked=True, ax=ax, colormap='Set2', edgecolor='black', linewidth=0.5)
+        safe_colors = get_safe_colors("Set2", len(elements_mod))
+        df_pct.plot(kind='bar', stacked=True, ax=ax, color=safe_colors, edgecolor='black', linewidth=0.5)
         ax.set_ylabel('Relative Composition (%)', fontsize=font_size, fontweight='bold')
         ax.set_title(f'Normalized Element Distribution: {timepoint}', fontsize=font_size+2, fontweight='bold')
         ax.tick_params(axis='x', rotation=45)
@@ -773,4 +808,4 @@ with tab5:
             st.dataframe(comp_table)
 
 st.markdown("---")
-st.caption("📊 ICP-AES Visualization Suite v2.2 | Supports: streamlit, pandas, numpy, matplotlib, seaborn, plotly, kaleido, scipy")
+st.caption("📊 ICP-AES Visualization Suite v2.3 | Supports: streamlit, pandas, numpy, matplotlib, seaborn, plotly, kaleido, scipy")
