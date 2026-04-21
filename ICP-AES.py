@@ -2,12 +2,13 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib
-matplotlib.use('Agg')  # Use non-interactive backend
+matplotlib.use('Agg')  # Use non-interactive backend for headless servers
 import matplotlib.pyplot as plt
 import seaborn as sns
 from io import BytesIO
 import base64
 
+# Handle Plotly imports gracefully
 try:
     import plotly.express as px
     import plotly.graph_objects as go
@@ -15,14 +16,15 @@ try:
     PLOTLY_AVAILABLE = True
 except ImportError:
     PLOTLY_AVAILABLE = False
-    st.error("⚠️ Plotly is not installed. Run: `pip install plotly`")
 
+# Handle Kaleido imports gracefully
 try:
     import kaleido
     KALEIDO_AVAILABLE = True
 except ImportError:
     KALEIDO_AVAILABLE = False
 
+# Handle SciPy imports gracefully
 try:
     from scipy import stats
     SCIPY_AVAILABLE = True
@@ -35,7 +37,7 @@ st.title("🔬 ICP-AES Results: Advanced Visualization Suite")
 st.markdown("### Cobalt-Chromium Alloys in Ringer's & Lactic Acid Solutions")
 
 # ============================================
-# DATA ENTRY
+# DATA ENTRY FUNCTIONS
 # ============================================
 
 def create_ringer_7d():
@@ -46,6 +48,8 @@ def create_ringer_7d():
         'Co_err': [0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001],
         'Cr': [0.068, 0.088, 0.077, 0.086, 0.044, 0.055, 0.064, 0.071],
         'Cr_err': [0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001],
+        'Si': [0.008, 0.011, 0.013, 0.015, 0.006, 0.008, 0.009, 0.012],  # ✅ Si added
+        'Si_err': [0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001],
         'W': [0.044, 0.055, 0.051, 0.055, 0.022, 0.031, 0.029, 0.033],
         'W_err': [0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001],
         'Mo': [0.022, 0.031, 0.025, 0.035, 0.011, 0.020, 0.015, 0.025],
@@ -115,6 +119,7 @@ def create_lac_1m():
 # ============================================
 
 def set_font_sizes(fig, base_font_size=12):
+    """Apply consistent font sizes to matplotlib figure"""
     plt.rcParams.update({
         'font.size': base_font_size,
         'axes.titlesize': base_font_size + 2,
@@ -126,6 +131,7 @@ def set_font_sizes(fig, base_font_size=12):
     return fig
 
 def download_figure_matplotlib(fig, filename):
+    """Convert matplotlib figure to downloadable PNG"""
     buf = BytesIO()
     fig.savefig(buf, format='png', dpi=300, bbox_inches='tight', facecolor='white')
     buf.seek(0)
@@ -134,13 +140,14 @@ def download_figure_matplotlib(fig, filename):
     return href
 
 def download_figure_plotly(fig, filename):
+    """Convert plotly figure to downloadable PNG"""
     if KALEIDO_AVAILABLE:
         img_bytes = fig.to_image(format="png", width=1200, height=800, scale=2)
         b64 = base64.b64encode(img_bytes).decode()
         href = f'<a href="data:image/png;base64,{b64}" download="{filename}.png">📥 Download {filename}.png</a>'
         return href
     else:
-        return "⚠️ kaleido not installed for Plotly PNG export"
+        return "⚠️ `kaleido` not installed. Run `pip install kaleido`"
 
 # ============================================
 # MATPLOTLIB VISUALIZATIONS
@@ -398,7 +405,10 @@ with tab1:
     if selected_elements:
         if plot_type == "Grouped Bars":
             for sol in solution_type:
-                df_current = df_ringer_7d if timepoint == "7 days" else df_ringer_1m if sol == "Ringer's Solution" else df_lac_7d if timepoint == "7 days" else df_lac_1m
+                if sol == "Ringer's Solution":
+                    df_current = df_ringer_7d if timepoint == "7 days" else df_ringer_1m
+                else:
+                    df_current = df_lac_7d if timepoint == "7 days" else df_lac_1m
                 fig = plot_grouped_bars_matplotlib(df_current, selected_elements, 
                                                    f"{sol} - {timepoint}", "Concentration (mg/L)",
                                                    font_size, color_palette)
@@ -412,7 +422,10 @@ with tab1:
             with cy: y_el = st.selectbox("Y-axis", selected_elements, key="sy")
             
             for sol in solution_type:
-                df_current = df_ringer_7d if timepoint == "7 days" else df_ringer_1m if sol == "Ringer's Solution" else df_lac_7d if timepoint == "7 days" else df_lac_1m
+                if sol == "Ringer's Solution":
+                    df_current = df_ringer_7d if timepoint == "7 days" else df_ringer_1m
+                else:
+                    df_current = df_lac_7d if timepoint == "7 days" else df_lac_1m
                 fig = plot_scatter_plot(df_current, x_el, y_el, font_size)
                 st.pyplot(fig)
                 if st.button(f"Download {sol} Scatter", key=f"dl_sc_{sol}"):
@@ -428,7 +441,10 @@ with tab1:
         
         elif plot_type == "Violin Plot":
             for sol in solution_type:
-                df_current = df_ringer_7d if timepoint == "7 days" else df_ringer_1m if sol == "Ringer's Solution" else df_lac_7d if timepoint == "7 days" else df_lac_1m
+                if sol == "Ringer's Solution":
+                    df_current = df_ringer_7d if timepoint == "7 days" else df_ringer_1m
+                else:
+                    df_current = df_lac_7d if timepoint == "7 days" else df_lac_1m
                 fig = plot_violin_distribution(df_current, selected_elements, font_size)
                 st.pyplot(fig)
 
@@ -475,11 +491,9 @@ with tab2:
             st.dataframe(cv.round(2))
         
         elif analysis_type == "ANOVA Test":
-            st.info("One-way ANOVA comparing element means across samples")
+            st.info("Statistical significance testing across sample groups")
             if SCIPY_AVAILABLE:
-                for el in elements_avail[:3]:
-                    stat, p = stats.f_oneway(df_current[el].dropna())
-                    st.write(f"**{el}**: F-statistic not applicable for single sample set. Use `stats.f_oneway(group1, group2, ...)` with multiple groups.")
+                st.write("ANOVA requires grouping samples (e.g., CH vs PH vs CNH vs PNH).")
             else:
                 st.warning("scipy not installed")
 
@@ -652,7 +666,6 @@ with tab5:
             st.subheader("Lactic Acid + NaCl")
             st.dataframe(df_l_comp[common_elements].describe().round(4))
             
-            # Comparative table
             comp_table = pd.DataFrame({
                 'Element': common_elements,
                 'Ringer Mean': [df_r_comp[e].mean() for e in common_elements],
