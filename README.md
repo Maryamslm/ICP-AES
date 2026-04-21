@@ -4,3 +4,5 @@
 [![Static Badge](https://img.shields.io/badge/ICP-AES-v2.0-brightgreen.svg)](https://icp-aes.streamlit.app/) (More plot option)
 
 [![Static Badge](https://img.shields.io/badge/ICP-AES-v3.0-brightgreen.svg)](https://icp-ase-no2.streamlit.app/) (More plot design option)
+
+[![Static Badge](https://img.shields.io/badge/ICP-AES-v4.0-brightgreen.svg)](https://icp-aes-no-3py-4roz59ne8fgzstgrmsmhte.streamlit.app/) (More plot design option)
