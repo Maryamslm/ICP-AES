@@ -39,8 +39,13 @@ st.set_page_config(page_title="ICP-AES Publication Graphs", layout="wide", page_
 
 def apply_matplotlib_styling(font_family, font_style, font_size, publication_style, color_palette):
     """Apply global matplotlib styling based on sidebar controls"""
+    # Safe font family assignment
+    try:
+        plt.rcParams['font.family'] = font_family
+    except Exception:
+        plt.rcParams['font.family'] = 'sans-serif'
+        
     plt.rcParams.update({
-        'font.family': font_family,
         'font.size': font_size,
         'axes.titlesize': font_size + 2,
         'axes.labelsize': font_size,
@@ -51,11 +56,12 @@ def apply_matplotlib_styling(font_family, font_style, font_size, publication_sty
         'axes.facecolor': 'white',
         'savefig.dpi': 300,
         'savefig.bbox': 'tight',
-        'savefig.transparent': False
+        'savefig.transparent': False,
+        'font.weight': 'bold' if 'Bold' in font_style else 'normal',
+        'font.style': 'italic' if 'Italic' in font_style else 'normal'
     })
     
     if publication_style:
-        plt.style.use('seaborn-v0_8-whitegrid')
         plt.rcParams.update({
             'axes.spines.right': False,
             'axes.spines.top': False,
@@ -80,15 +86,13 @@ def apply_matplotlib_styling(font_family, font_style, font_size, publication_sty
             'xtick.direction': 'out',
             'ytick.direction': 'out'
         })
-        
-    return plt
 
 # ============================================
 # DATA ENTRY
 # ============================================
 
 def create_ringer_7d():
-    data = {
+    return pd.DataFrame({
         'Sample': ['CH0-Ringer-7D', 'CH45-Ringer-7D', 'PH0-Ringer-7D', 'PH45-Ringer-7D',
                    'CNH0-Ringer-7D', 'CNH45-Ringer-7D', 'PNH0-Ringer-7D', 'PNH45-Ringer-7D'],
         'Co': [0.099, 0.112, 0.088, 0.095, 0.079, 0.082, 0.069, 0.071],
@@ -101,11 +105,10 @@ def create_ringer_7d():
         'W_err': [0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001],
         'Mo': [0.022, 0.031, 0.025, 0.035, 0.011, 0.020, 0.015, 0.025],
         'Mo_err': [0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001],
-    }
-    return pd.DataFrame(data)
+    })
 
 def create_ringer_1m():
-    data = {
+    return pd.DataFrame({
         'Sample': ['CH0-Ringer-1M', 'CH45-Ringer-1M', 'PH0-Ringer-1M', 'PH45-Ringer-1M',
                    'CNH0-Ringer-1M', 'CNH45-Ringer-1M', 'PNH0-Ringer-1M', 'PNH45-Ringer-1M'],
         'Co': [0.145, 0.167, 0.175, 0.191, 0.111, 0.122, 0.133, 0.145],
@@ -120,11 +123,10 @@ def create_ringer_1m():
         'Mo_err': [0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001],
         'Al': [0.009, 0.010, 0.010, 0.015, 0, 0, 0, 0],
         'Al_err': [0.001, 0.001, 0.001, 0.001, 0, 0, 0, 0],
-    }
-    return pd.DataFrame(data)
+    })
 
 def create_lac_7d():
-    data = {
+    return pd.DataFrame({
         'Sample': ['CH0-LAC-7D', 'CH45-LAC-7D', 'PH0-LAC-7D', 'PH45-LAC-7D',
                    'CNH0-LAC-7D', 'CNH45-LAC-7D', 'PNH0-LAC-7D', 'PNH45-LAC-7D'],
         'Co': [1.45, 1.77, 1.89, 1.99, 1.22, 1.34, 1.33, 1.55],
@@ -137,11 +139,10 @@ def create_lac_7d():
         'W_err': [0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001],
         'Mo': [0.046, 0.049, 0.051, 0.054, 0.022, 0.029, 0.033, 0.041],
         'Mo_err': [0.001, 0.002, 0.001, 0.002, 0.001, 0.001, 0.001, 0.001],
-    }
-    return pd.DataFrame(data)
+    })
 
 def create_lac_1m():
-    data = {
+    return pd.DataFrame({
         'Sample': ['CH0-LAC-1M', 'CH45-LAC-1M', 'PH0-LAC-1M', 'PH45-LAC-1M',
                    'CNH0-LAC-1M', 'CNH45-LAC-1M', 'PNH0-LAC-1M', 'PNH45-LAC-1M'],
         'Co': [1.91, 1.99, 2.11, 2.34, 1.11, 1.33, 1.35, 1.55],
@@ -158,45 +159,47 @@ def create_lac_1m():
         'Al_err': [0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001],
         'Fe': [0.011, 0.014, 0.017, 0.020, 0.009, 0.010, 0.013, 0.019],
         'Fe_err': [0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001, 0.001],
-    }
-    return pd.DataFrame(data)
+    })
 
 # ============================================
 # HELPER FUNCTIONS
 # ============================================
 
 def extract_sample_prefix(sample_name):
-    """Extract CH0, PH45, CNH0, PNH45, etc."""
     for prefix in ['CH0', 'CH45', 'PH0', 'PH45', 'CNH0', 'CNH45', 'PNH0', 'PNH45']:
         if prefix in sample_name:
             return prefix
-    return sample_name
+    return sample_name.split('-')[0]
 
 def get_grouped_data(df, group_by_prefix=False):
-    """Return data with optional grouping by sample prefix"""
+    """Return data with optional grouping by sample prefix. Fixed merge collision issue."""
     if not group_by_prefix:
         return df.copy()
     
-    df_grouped = df.copy()
-    df_grouped['Group'] = df_grouped['Sample'].apply(extract_sample_prefix)
+    df_g = df.copy()
+    df_g['Group'] = df_g['Sample'].apply(extract_sample_prefix)
     
-    # Define grouping order
-    group_order = ['CH0', 'PH0', 'CNH0', 'PNH0', 'CH45', 'PH45', 'CNH45', 'PNH45']
-    df_grouped['Group'] = pd.Categorical(df_grouped['Group'], categories=group_order, ordered=True)
-    df_grouped = df_grouped.sort_values('Group')
+    all_prefixes = ['CH0', 'PH0', 'CNH0', 'PNH0', 'CH45', 'PH45', 'CNH45', 'PNH45']
+    valid = [p for p in all_prefixes if p in df_g['Group'].values]
+    df_g['Group'] = pd.Categorical(df_g['Group'], categories=valid, ordered=True)
+    df_g = df_g.sort_values('Group')
     
-    # Aggregate numeric columns
-    numeric_cols = [c for c in df_grouped.columns if not c.endswith('_err') and c not in ['Sample', 'Group']]
-    agg_data = df_grouped.groupby('Group')[numeric_cols].mean().reset_index()
-    err_data = df_grouped.groupby('Group')[[f'{c}_err' for c in numeric_cols if f'{c}_err' in df_grouped.columns]].sem().reset_index()
-    err_data.columns = ['Group'] + numeric_cols
+    num_cols = [c for c in df_g.columns if not c.endswith('_err') and c not in ['Sample', 'Group']]
     
-    final_df = agg_data.merge(err_data, on='Group', how='left')
-    final_df = final_df.rename(columns={'Group': 'Sample'})
-    for c in numeric_cols:
-        if f'{c}_err' not in final_df.columns:
-            final_df[f'{c}_err'] = np.zeros_like(final_df[c])
-    return final_df
+    agg = df_g.groupby('Group')[num_cols].mean()
+    err_present = [f'{c}_err' for c in num_cols if f'{c}_err' in df_g.columns]
+    err = df_g.groupby('Group')[err_present].sem()
+    err.columns = [c.replace('_err', '') for c in err_present]
+    
+    res = pd.concat([agg, err], axis=1).reset_index()
+    res = res.rename(columns={'Group': 'Sample'})
+    
+    for c in num_cols:
+        ec = f'{c}_err'
+        if ec not in res.columns:
+            res[ec] = 0.0
+            
+    return res
 
 def download_figure_matplotlib(fig, filename):
     buf = BytesIO()
@@ -267,9 +270,8 @@ def plot_scatter_plot(df, x_element, y_element, font_size, group_by=False):
             z = np.polyfit(x_vals, y_vals, 1)
             p = np.poly1d(z)
             ax.plot(x_vals, p(x_vals), '--', color=color, alpha=0.7, linewidth=1.5, zorder=2)
-            
-            # Confidence interval band
-            ci = np.polyval(np.polyfit(x_vals, y_vals, 1, cov=True)[1], x_vals)
+            cov = np.polyfit(x_vals, y_vals, 1, cov=True)[1]
+            ci = np.polyval(cov, x_vals)
             ax.fill_between(x_vals, p(x_vals)-ci*1.96, p(x_vals)+ci*1.96, alpha=0.1, color=color)
     
     ax.set_xlabel(f'{x_element} (mg/L)', fontsize=font_size, fontweight='bold')
@@ -444,18 +446,13 @@ st.markdown("### Cobalt-Chromium Alloys in Ringer's & Lactic Acid Solutions | Pu
 # SIDEBAR CONTROLS
 st.sidebar.header("🎛️ Appearance & Controls")
 
-# Font & Typography
 col_f1, col_f2 = st.sidebar.columns(2)
 with col_f1:
-    font_family = st.selectbox("Font Family", ["Arial", "Times New Roman", "Helvetica", "Georgia", "Courier New", "Verdana", "sans-serif"])
+    font_family = st.selectbox("Font Family", ["sans-serif", "Arial", "Times New Roman", "Helvetica", "Georgia", "Verdana", "Courier New"])
 with col_f2:
     font_size = st.slider("Font Size (pts)", 8, 22, 13)
 
 font_style = st.sidebar.selectbox("Font Weight/Style", ["Normal", "Bold", "Italic", "Bold-Italic"])
-plt.rcParams['font.weight'] = 'bold' if 'Bold' in font_style else 'normal'
-plt.rcParams['font.style'] = 'italic' if 'Italic' in font_style else 'normal'
-
-# Colors & Theme
 color_palettes = [
     "colorblind", "tab10", "tab20", "Set1", "Set2", "Set3", "pastel", "muted", 
     "dark", "bright", "viridis", "plasma", "cividis", "flare", "crest", "mako",
@@ -759,4 +756,4 @@ with tab5:
             st.dataframe(comp_table)
 
 st.markdown("---")
-st.caption("📊 ICP-AES Visualization Suite v2.0 | Supports: streamlit, pandas, numpy, matplotlib, seaborn, plotly, kaleido, scipy")
+st.caption("📊 ICP-AES Visualization Suite v2.1 | Supports: streamlit, pandas, numpy, matplotlib, seaborn, plotly, kaleido, scipy")
