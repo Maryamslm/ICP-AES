@@ -38,8 +38,6 @@ except ImportError:
 st.set_page_config(page_title="ICP-AES Publication Graphs", layout="wide", page_icon="📊")
 
 def apply_matplotlib_styling(font_family, font_style, font_size, publication_style, color_palette):
-    """Apply global matplotlib styling based on sidebar controls"""
-    # Safe font family assignment
     try:
         plt.rcParams['font.family'] = font_family
     except Exception:
@@ -162,58 +160,63 @@ def create_lac_1m():
     })
 
 # ============================================
-# HELPER FUNCTIONS
+# HELPER FUNCTIONS (FIXED)
 # ============================================
 
-def extract_sample_prefix(sample_name):
-    for prefix in ['CH0', 'CH45', 'PH0', 'PH45', 'CNH0', 'CNH45', 'PNH0', 'PNH45']:
-        if prefix in sample_name:
-            return prefix
-    return sample_name.split('-')[0]
-
 def get_grouped_data(df, group_by_prefix=False):
-    """Return data with optional grouping by sample prefix. Fixed merge collision issue."""
+    """Return data with optional grouping. Completely rewritten to avoid column collisions."""
     if not group_by_prefix:
         return df.copy()
-    
+        
     df_g = df.copy()
-    df_g['Group'] = df_g['Sample'].apply(extract_sample_prefix)
+    df_g['Group'] = df_g['Sample'].apply(lambda x: x.split('-')[0])
     
     all_prefixes = ['CH0', 'PH0', 'CNH0', 'PNH0', 'CH45', 'PH45', 'CNH45', 'PNH45']
     valid = [p for p in all_prefixes if p in df_g['Group'].values]
     df_g['Group'] = pd.Categorical(df_g['Group'], categories=valid, ordered=True)
     df_g = df_g.sort_values('Group')
     
-    num_cols = [c for c in df_g.columns if not c.endswith('_err') and c not in ['Sample', 'Group']]
+    val_cols = [c for c in df_g.columns if not c.endswith('_err') and c not in ['Sample', 'Group']]
     
-    agg = df_g.groupby('Group')[num_cols].mean()
-    err_present = [f'{c}_err' for c in num_cols if f'{c}_err' in df_g.columns]
-    err = df_g.groupby('Group')[err_present].sem()
-    err.columns = [c.replace('_err', '') for c in err_present]
-    
-    res = pd.concat([agg, err], axis=1).reset_index()
-    res = res.rename(columns={'Group': 'Sample'})
-    
-    for c in num_cols:
-        ec = f'{c}_err'
-        if ec not in res.columns:
-            res[ec] = 0.0
+    # Manual dictionary builder prevents pandas column duplication & shape mismatch bugs
+    result_data = {'Sample': []}
+    for c in val_cols:
+        result_data[c] = []
+        result_data[f'{c}_err'] = []
+        
+    for group_name, group_df in df_g.groupby('Group'):
+        result_data['Sample'].append(group_name)
+        for c in val_cols:
+            vals = group_df[c].dropna()
+            result_data[c].append(vals.mean() if len(vals) > 0 else 0.0)
             
-    return res
+            err_col = f'{c}_err'
+            if err_col in group_df.columns:
+                errs = group_df[err_col].dropna()
+                if len(errs) > 1:
+                    result_data[err_col].append(errs.sem())
+                elif len(errs) == 1:
+                    result_data[err_col].append(errs.values[0])
+                else:
+                    result_data[err_col].append(0.0)
+            else:
+                result_data[err_col].append(0.0)
+                
+    return pd.DataFrame(result_data)
 
 def download_figure_matplotlib(fig, filename):
     buf = BytesIO()
     fig.savefig(buf, format='png', dpi=300, bbox_inches='tight', facecolor='white')
     buf.seek(0)
     b64 = base64.b64encode(buf.read()).decode()
-    href = f'<a href="data:image/png;base64,{b64}" download="{filename}.png">📥 Download {filename}.png</a>'
+    href = f'<a href="image/png;base64,{b64}" download="{filename}.png">📥 Download {filename}.png</a>'
     return href
 
 def download_figure_plotly(fig, filename):
     if KALEIDO_AVAILABLE:
         img_bytes = fig.to_image(format="png", width=1200, height=800, scale=2)
         b64 = base64.b64encode(img_bytes).decode()
-        href = f'<a href="data:image/png;base64,{b64}" download="{filename}.png">📥 Download {filename}.png</a>'
+        href = f'<a href="image/png;base64,{b64}" download="{filename}.png">📥 Download {filename}.png</a>'
         return href
     return "⚠️ `kaleido` not installed for Plotly export"
 
@@ -225,15 +228,21 @@ def plot_grouped_bars_matplotlib(df, elements, title, ylabel, font_size, color_p
     df = get_grouped_data(df, group_by)
     samples = df['Sample'].tolist()
     x = np.arange(len(samples))
-    width = 0.8 / len(elements)
+    width = 0.8 / len(elements) if len(elements) > 0 else 0.8
     
     fig, ax = plt.subplots(figsize=(13, 7))
     colors = sns.color_palette(color_palette, len(elements))
     
     for i, element in enumerate(elements):
         if element in df.columns:
-            values = df[element].values
-            errors = df[f'{element}_err'].values if f'{element}_err' in df.columns else np.zeros_like(values)
+            values = np.asarray(df[element].values).ravel()
+            err_col = f'{element}_err'
+            errors = np.asarray(df[err_col].values).ravel() if err_col in df.columns else np.zeros_like(values)
+            
+            # Ensure exact shape matching to prevent broadcast errors
+            if len(values) != len(x):
+                continue
+                
             offset = (i - len(elements)/2 + 0.5) * width
             ax.bar(x + offset, values, width, label=element, 
                    color=colors[i], edgecolor='black', linewidth=0.8, alpha=0.9)
@@ -255,14 +264,15 @@ def plot_scatter_plot(df, x_element, y_element, font_size, group_by=False):
     df = get_grouped_data(df, group_by)
     fig, ax = plt.subplots(figsize=(11, 9))
     
-    groups = df['Sample'].str.extract(r'(CH|PH|CNH|PNH)')[0]
+    groups = df['Sample'].str.extract(r'(CH|PH|CNH|PNH)')[0].fillna('Unknown')
     unique_groups = groups.unique()
     colors = sns.color_palette("colorblind", len(unique_groups))
     
     for group, color in zip(unique_groups, colors):
         mask = groups == group
-        x_vals = df[mask][x_element].values
-        y_vals = df[mask][y_element].values
+        x_vals = np.asarray(df[mask][x_element].values).ravel()
+        y_vals = np.asarray(df[mask][y_element].values).ravel()
+        
         ax.scatter(x_vals, y_vals, label=group, s=120, alpha=0.85, 
                    color=color, edgecolors='black', linewidth=1.5, zorder=3)
         
@@ -270,9 +280,12 @@ def plot_scatter_plot(df, x_element, y_element, font_size, group_by=False):
             z = np.polyfit(x_vals, y_vals, 1)
             p = np.poly1d(z)
             ax.plot(x_vals, p(x_vals), '--', color=color, alpha=0.7, linewidth=1.5, zorder=2)
-            cov = np.polyfit(x_vals, y_vals, 1, cov=True)[1]
-            ci = np.polyval(cov, x_vals)
-            ax.fill_between(x_vals, p(x_vals)-ci*1.96, p(x_vals)+ci*1.96, alpha=0.1, color=color)
+            try:
+                cov = np.polyfit(x_vals, y_vals, 1, cov=True)[1]
+                ci = np.polyval(cov, x_vals)
+                ax.fill_between(x_vals, p(x_vals)-ci*1.96, p(x_vals)+ci*1.96, alpha=0.1, color=color)
+            except:
+                pass
     
     ax.set_xlabel(f'{x_element} (mg/L)', fontsize=font_size, fontweight='bold')
     ax.set_ylabel(f'{y_element} (mg/L)', fontsize=font_size, fontweight='bold')
@@ -280,10 +293,13 @@ def plot_scatter_plot(df, x_element, y_element, font_size, group_by=False):
     ax.legend(frameon=True, fontsize=font_size-1, loc='best', fancybox=True, shadow=True)
     ax.grid(True, linestyle=':', alpha=0.3, zorder=1)
     
-    corr, p_val = stats.pearsonr(df[x_element], df[y_element]) if SCIPY_AVAILABLE else (df[x_element].corr(df[y_element]), 0)
-    ax.text(0.05, 0.95, f'r = {corr:.3f}\np = {p_val:.4f}', transform=ax.transAxes, 
-            fontsize=font_size, verticalalignment='top', fontweight='bold',
-            bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor='gray', alpha=0.9))
+    try:
+        corr, p_val = stats.pearsonr(df[x_element], df[y_element]) if SCIPY_AVAILABLE else (df[x_element].corr(df[y_element]), 0)
+        ax.text(0.05, 0.95, f'r = {corr:.3f}\np = {p_val:.4f}', transform=ax.transAxes, 
+                fontsize=font_size, verticalalignment='top', fontweight='bold',
+                bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor='gray', alpha=0.9))
+    except:
+        pass
     plt.tight_layout()
     return fig
 
@@ -296,7 +312,7 @@ def plot_radar_chart(df, sample_names, elements, font_size, group_by=False):
     
     for idx, sample in enumerate(sample_names):
         if sample in df['Sample'].values:
-            values = df[df['Sample'] == sample][elements].values.flatten().tolist()
+            values = np.asarray(df[df['Sample'] == sample][elements].values).ravel().tolist()
             values += values[:1]
             ax.plot(angles, values, 'o-', linewidth=2.5, label=sample, color=colors[idx], markersize=8)
             ax.fill(angles, values, alpha=0.15, color=colors[idx])
@@ -381,8 +397,7 @@ def plot_parallel_coordinates(df, elements, font_size, font_family, publication_
                                   color='Co' if 'Co' in df.columns else elements[0],
                                   color_continuous_scale=px.colors.diverging.Tealrose,
                                   title='Parallel Coordinates: Multi-element Comparison')
-    fig.update_layout(font=dict(family=font_family, size=font_size),
-                      parallelcoordinatess=dict(dimensions=dict(tickformat='.3f')))
+    fig.update_layout(font=dict(family=font_family, size=font_size))
     return apply_plotly_style(fig, font_family, font_size, publication_style)
 
 def plot_bubble_chart(df, x_element, y_element, size_element, font_size, font_family, publication_style):
@@ -410,8 +425,8 @@ def plot_solution_comparison(df_ringer, df_lac, element, font_size, publication_
     fig, ax = plt.subplots(figsize=(13, 7))
     x = np.arange(len(df_ringer['Sample']))
     width = 0.32
-    vals_ringer = df_ringer[element].values
-    vals_lac = df_lac[element].values
+    vals_ringer = np.asarray(df_ringer[element].values).ravel()
+    vals_lac = np.asarray(df_lac[element].values).ravel()
     
     ax.bar(x - width/2, vals_ringer, width, label="Ringer's Solution",
            color='#3A86FF', edgecolor='black', linewidth=1, alpha=0.9)
@@ -455,8 +470,7 @@ with col_f2:
 font_style = st.sidebar.selectbox("Font Weight/Style", ["Normal", "Bold", "Italic", "Bold-Italic"])
 color_palettes = [
     "colorblind", "tab10", "tab20", "Set1", "Set2", "Set3", "pastel", "muted", 
-    "dark", "bright", "viridis", "plasma", "cividis", "flare", "crest", "mako",
-    "Wong (High-Contrast)", "Publication Standard"
+    "dark", "bright", "viridis", "plasma", "cividis", "flare", "crest", "mako"
 ]
 color_palette = st.sidebar.selectbox("Color Palette", color_palettes)
 publication_style = st.sidebar.toggle("Publication Quality Mode", value=True, 
@@ -584,8 +598,11 @@ with tab2:
         elif analysis == "Normality Test":
             if SCIPY_AVAILABLE:
                 for el in elements[:4]:
-                    stat, p = stats.shapiro(df_c[el].dropna())
-                    st.write(f"**{el}**: Shapiro-Wilk p={p:.4f} {'(Normal)' if p > 0.05 else '(Non-normal)'}")
+                    try:
+                        stat, p = stats.shapiro(df_c[el].dropna())
+                        st.write(f"**{el}**: Shapiro-Wilk p={p:.4f} {'(Normal)' if p > 0.05 else '(Non-normal)'}")
+                    except:
+                        st.write(f"**{el}**: Insufficient data for normality test.")
             else:
                 st.warning("scipy required for normality tests")
 
@@ -756,4 +773,4 @@ with tab5:
             st.dataframe(comp_table)
 
 st.markdown("---")
-st.caption("📊 ICP-AES Visualization Suite v2.1 | Supports: streamlit, pandas, numpy, matplotlib, seaborn, plotly, kaleido, scipy")
+st.caption("📊 ICP-AES Visualization Suite v2.2 | Supports: streamlit, pandas, numpy, matplotlib, seaborn, plotly, kaleido, scipy")
