@@ -1,15 +1,33 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend
 import matplotlib.pyplot as plt
 import seaborn as sns
 from io import BytesIO
 import base64
-import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-import kaleido
-from scipy import stats
+
+try:
+    import plotly.express as px
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    PLOTLY_AVAILABLE = True
+except ImportError:
+    PLOTLY_AVAILABLE = False
+    st.error("⚠️ Plotly is not installed. Run: `pip install plotly`")
+
+try:
+    import kaleido
+    KALEIDO_AVAILABLE = True
+except ImportError:
+    KALEIDO_AVAILABLE = False
+
+try:
+    from scipy import stats
+    SCIPY_AVAILABLE = True
+except ImportError:
+    SCIPY_AVAILABLE = False
 
 # Page configuration
 st.set_page_config(page_title="ICP-AES Publication Graphs", layout="wide", page_icon="📊")
@@ -17,7 +35,7 @@ st.title("🔬 ICP-AES Results: Advanced Visualization Suite")
 st.markdown("### Cobalt-Chromium Alloys in Ringer's & Lactic Acid Solutions")
 
 # ============================================
-# DATA ENTRY (from your DOCX file)
+# DATA ENTRY
 # ============================================
 
 def create_ringer_7d():
@@ -93,41 +111,42 @@ def create_lac_1m():
     return pd.DataFrame(data)
 
 # ============================================
-# MODERN PLOTTING FUNCTIONS
+# HELPER FUNCTIONS
 # ============================================
 
 def set_font_sizes(fig, base_font_size=12):
-    """Apply consistent font sizes to matplotlib figure"""
-    plt.rcParams['font.size'] = base_font_size
-    plt.rcParams['axes.titlesize'] = base_font_size + 2
-    plt.rcParams['axes.labelsize'] = base_font_size
-    plt.rcParams['xtick.labelsize'] = base_font_size - 1
-    plt.rcParams['ytick.labelsize'] = base_font_size - 1
-    plt.rcParams['legend.fontsize'] = base_font_size - 1
+    plt.rcParams.update({
+        'font.size': base_font_size,
+        'axes.titlesize': base_font_size + 2,
+        'axes.labelsize': base_font_size,
+        'xtick.labelsize': base_font_size - 1,
+        'ytick.labelsize': base_font_size - 1,
+        'legend.fontsize': base_font_size - 1
+    })
     return fig
 
 def download_figure_matplotlib(fig, filename):
-    """Convert matplotlib figure to downloadable PNG"""
     buf = BytesIO()
-    fig.savefig(buf, format='png', dpi=300, bbox_inches='tight')
+    fig.savefig(buf, format='png', dpi=300, bbox_inches='tight', facecolor='white')
     buf.seek(0)
     b64 = base64.b64encode(buf.read()).decode()
     href = f'<a href="data:image/png;base64,{b64}" download="{filename}.png">📥 Download {filename}.png</a>'
     return href
 
 def download_figure_plotly(fig, filename):
-    """Convert plotly figure to downloadable PNG"""
-    img_bytes = fig.to_image(format="png", width=1200, height=800, scale=2)
-    b64 = base64.b64encode(img_bytes).decode()
-    href = f'<a href="data:image/png;base64,{b64}" download="{filename}.png">📥 Download {filename}.png</a>'
-    return href
+    if KALEIDO_AVAILABLE:
+        img_bytes = fig.to_image(format="png", width=1200, height=800, scale=2)
+        b64 = base64.b64encode(img_bytes).decode()
+        href = f'<a href="data:image/png;base64,{b64}" download="{filename}.png">📥 Download {filename}.png</a>'
+        return href
+    else:
+        return "⚠️ kaleido not installed for Plotly PNG export"
 
 # ============================================
 # MATPLOTLIB VISUALIZATIONS
 # ============================================
 
 def plot_grouped_bars_matplotlib(df, elements, title, ylabel, font_size=12, color_palette='viridis'):
-    """Create grouped bar plot with error bars"""
     samples = df['Sample'].tolist()
     x = np.arange(len(samples))
     width = 0.8 / len(elements)
@@ -140,8 +159,8 @@ def plot_grouped_bars_matplotlib(df, elements, title, ylabel, font_size=12, colo
             values = df[element].values
             errors = df[f'{element}_err'].values if f'{element}_err' in df.columns else np.zeros_like(values)
             offset = (i - len(elements)/2 + 0.5) * width
-            bars = ax.bar(x + offset, values, width, label=element, 
-                          color=colors[i], edgecolor='black', linewidth=0.5)
+            ax.bar(x + offset, values, width, label=element, 
+                   color=colors[i], edgecolor='black', linewidth=0.5)
             ax.errorbar(x + offset, values, yerr=errors, fmt='none', 
                         ecolor='black', capsize=3, capthick=1)
     
@@ -153,15 +172,11 @@ def plot_grouped_bars_matplotlib(df, elements, title, ylabel, font_size=12, colo
     ax.set_title(title, fontsize=font_size+2, fontweight='bold', pad=15)
     ax.grid(axis='y', linestyle='--', alpha=0.3)
     ax.set_axisbelow(True)
-    
     plt.tight_layout()
     return set_font_sizes(fig, font_size)
 
 def plot_scatter_plot(df, x_element, y_element, font_size=12):
-    """Create publication-ready scatter plot with trend line"""
     fig, ax = plt.subplots(figsize=(10, 8))
-    
-    # Extract groups
     groups = df['Sample'].str.extract(r'(CH|PH|CNH|PNH)')[0]
     unique_groups = groups.unique()
     colors = sns.color_palette("husl", len(unique_groups))
@@ -171,9 +186,7 @@ def plot_scatter_plot(df, x_element, y_element, font_size=12):
         x_vals = df[mask][x_element].values
         y_vals = df[mask][y_element].values
         ax.scatter(x_vals, y_vals, label=group, s=100, alpha=0.7, 
-                  color=color, edgecolors='black', linewidth=1.5)
-        
-        # Add trend line
+                   color=color, edgecolors='black', linewidth=1.5)
         if len(x_vals) > 1:
             z = np.polyfit(x_vals, y_vals, 1)
             p = np.poly1d(z)
@@ -185,22 +198,17 @@ def plot_scatter_plot(df, x_element, y_element, font_size=12):
     ax.legend(frameon=True, fontsize=font_size-1, loc='best')
     ax.grid(True, linestyle='--', alpha=0.3)
     
-    # Add correlation coefficient
     corr = df[x_element].corr(df[y_element])
     ax.text(0.05, 0.95, f'R = {corr:.3f}', transform=ax.transAxes, 
             fontsize=font_size, verticalalignment='top',
             bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
-    
     plt.tight_layout()
     return set_font_sizes(fig, font_size)
 
 def plot_radar_chart(df, sample_names, elements, font_size=12):
-    """Create radar chart for multi-element comparison"""
     fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(projection='polar'))
-    
     angles = np.linspace(0, 2 * np.pi, len(elements), endpoint=False).tolist()
     angles += angles[:1]
-    
     colors = sns.color_palette("tab10", len(sample_names))
     
     for idx, sample in enumerate(sample_names):
@@ -212,32 +220,27 @@ def plot_radar_chart(df, sample_names, elements, font_size=12):
     
     ax.set_xticks(angles[:-1])
     ax.set_xticklabels(elements, fontsize=font_size-1)
-    ax.set_ylim(0, max(df[elements].max().max() * 1.1))
+    max_val = df[elements].max().max() * 1.2
+    ax.set_ylim(0, max_val)
     ax.set_title('Element Profile Radar Chart', fontsize=font_size+2, fontweight='bold', pad=20)
     ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1.0), fontsize=font_size-1)
     ax.grid(True)
-    
     plt.tight_layout()
     return set_font_sizes(fig, font_size)
 
 def plot_violin_distribution(df, elements, font_size=12):
-    """Create violin plot showing data distribution"""
-    # Melt dataframe for seaborn
     df_melted = df.melt(id_vars=['Sample'], value_vars=elements, 
                         var_name='Element', value_name='Concentration')
-    
     fig, ax = plt.subplots(figsize=(12, 7))
     sns.violinplot(data=df_melted, x='Element', y='Concentration', 
                    palette='Set3', ax=ax, cut=0)
     sns.swarmplot(data=df_melted, x='Element', y='Concentration', 
                   color='black', alpha=0.6, size=4, ax=ax)
-    
     ax.set_xlabel('Element', fontsize=font_size, fontweight='bold')
     ax.set_ylabel('Concentration (mg/L)', fontsize=font_size, fontweight='bold')
     ax.set_title('Distribution of Element Concentrations', fontsize=font_size+2, fontweight='bold')
     ax.tick_params(axis='x', rotation=45)
     ax.grid(axis='y', linestyle='--', alpha=0.3)
-    
     plt.tight_layout()
     return set_font_sizes(fig, font_size)
 
@@ -246,41 +249,26 @@ def plot_violin_distribution(df, elements, font_size=12):
 # ============================================
 
 def plot_3d_scatter(df, x_element, y_element, z_element, font_size=12):
-    """Create interactive 3D scatter plot"""
     fig = px.scatter_3d(df, x=x_element, y=y_element, z=z_element,
                         color='Sample', size_max=10,
-                        title=f'3D Visualization: {x_element} vs {y_element} vs {z_element}',
-                        labels={x_element: f'{x_element} (mg/L)',
-                               y_element: f'{y_element} (mg/L)',
-                               z_element: f'{z_element} (mg/L)'})
-    
+                        title=f'3D Visualization: {x_element} vs {y_element} vs {z_element}')
     fig.update_layout(font=dict(size=font_size),
                      title_font_size=font_size+2,
                      legend_title_font_size=font_size)
-    
     return fig
 
 def plot_heatmap(df, elements, font_size=12):
-    """Create correlation heatmap"""
     corr_matrix = df[elements].corr()
-    
     fig = px.imshow(corr_matrix, text_auto=True, aspect='auto',
-                   color_continuous_scale='RdBu_r',
-                   title='Element Correlation Heatmap',
-                   labels=dict(color='Correlation'))
-    
+                    color_continuous_scale='RdBu_r',
+                    title='Element Correlation Heatmap')
     fig.update_layout(font=dict(size=font_size),
                      title_font_size=font_size+2,
                      width=800, height=700)
-    
     return fig
 
 def plot_sunburst(df, elements):
-    """Create sunburst chart for composition analysis"""
-    # Prepare hierarchical data
     avg_values = df[elements].mean()
-    
-    # Create sunburst data
     fig = go.Figure(go.Sunburst(
         labels=['Total'] + elements,
         parents=[''] + ['Total'] * len(elements),
@@ -289,106 +277,60 @@ def plot_sunburst(df, elements):
         marker=dict(colors=px.colors.qualitative.Set3),
         textinfo="label+percent entry"
     ))
-    
-    fig.update_layout(title='Element Composition Sunburst Chart',
-                     width=800, height=800)
-    
+    fig.update_layout(title='Element Composition Sunburst Chart', width=800, height=800)
     return fig
 
 def plot_parallel_coordinates(df, elements, font_size=12):
-    """Create parallel coordinates plot for multivariate analysis"""
     fig = px.parallel_coordinates(df, dimensions=elements,
                                   color='Co' if 'Co' in df.columns else elements[0],
                                   color_continuous_scale=px.colors.diverging.Tealrose,
                                   title='Parallel Coordinates: Multi-element Comparison')
-    
     fig.update_layout(font=dict(size=font_size),
                      title_font_size=font_size+2,
                      width=1000, height=600)
-    
     return fig
 
 def plot_bubble_chart(df, x_element, y_element, size_element, font_size=12):
-    """Create bubble chart with third dimension"""
     fig = px.scatter(df, x=x_element, y=y_element, size=size_element,
-                    color='Sample', hover_name='Sample',
-                    size_max=30,
-                    title=f'Bubble Chart: {x_element} vs {y_element} (size: {size_element})',
-                    labels={x_element: f'{x_element} (mg/L)',
-                           y_element: f'{y_element} (mg/L)'})
-    
-    fig.update_layout(font=dict(size=font_size),
-                     title_font_size=font_size+2,
-                     showlegend=True)
-    
-    return fig
-
-def plot_pie_chart(df, element, timepoint, font_size=12):
-    """Create pie chart for element distribution across samples"""
-    values = df[element].values
-    labels = df['Sample'].values
-    
-    fig = go.Figure(data=[go.Pie(labels=labels, values=values, 
-                                 hole=0.3,
-                                 textinfo='label+percent',
-                                 textposition='auto')])
-    
-    fig.update_layout(title=f'{element} Distribution - {timepoint}',
-                     font=dict(size=font_size),
-                     title_font_size=font_size+2,
-                     width=800, height=600)
-    
+                     color='Sample', hover_name='Sample', size_max=30,
+                     title=f'Bubble Chart: {x_element} vs {y_element} (size: {size_element})')
+    fig.update_layout(font=dict(size=font_size), title_font_size=font_size+2)
     return fig
 
 def plot_donut_comparison(df_ringer, df_lac, element, font_size=12):
-    """Compare element distribution between solutions using donut charts"""
     fig = make_subplots(rows=1, cols=2, specs=[[{'type':'domain'}, {'type':'domain'}]],
-                        subplot_titles=['Ringer\'s Solution', 'Lactic Acid + NaCl'])
-    
-    # Ringer's data
+                        subplot_titles=["Ringer's Solution", "Lactic Acid + NaCl"])
     values_ringer = df_ringer[element].values
+    values_lac = df_lac[element].values
     labels = df_ringer['Sample'].values
     
-    # Lactic acid data
-    values_lac = df_lac[element].values
-    
-    fig.add_trace(go.Pie(labels=labels, values=values_ringer, hole=0.4,
-                        name='Ringer\'s', marker=dict(colors=px.colors.qualitative.Set3)),
-                  row=1, col=1)
-    
-    fig.add_trace(go.Pie(labels=labels, values=values_lac, hole=0.4,
-                        name='Lactic Acid', marker=dict(colors=px.colors.qualitative.Set3)),
-                  row=1, col=2)
-    
+    fig.add_trace(go.Pie(labels=labels, values=values_ringer, hole=0.4, name="Ringer's",
+                         marker=dict(colors=px.colors.qualitative.Set3)), row=1, col=1)
+    fig.add_trace(go.Pie(labels=labels, values=values_lac, hole=0.4, name="Lactic Acid",
+                         marker=dict(colors=px.colors.qualitative.Set3)), row=1, col=2)
     fig.update_layout(title_text=f'{element} Distribution Comparison',
-                     font=dict(size=font_size),
-                     title_font_size=font_size+2,
+                     font=dict(size=font_size), title_font_size=font_size+2,
                      width=1200, height=600)
-    
     return fig
 
 def plot_solution_comparison(df_ringer, df_lac, element, font_size=12):
-    """Compare Ringer vs Lactic Acid solutions"""
     fig, ax = plt.subplots(figsize=(12, 7))
-    
     x = np.arange(len(df_ringer['Sample']))
     width = 0.35
-    
     vals_ringer = df_ringer[element].values
     vals_lac = df_lac[element].values
     
-    bars1 = ax.bar(x - width/2, vals_ringer, width, label='Ringer\'s Solution',
-                   color='#4682B4', edgecolor='black', linewidth=0.5)
-    bars2 = ax.bar(x + width/2, vals_lac, width, label='Lactic Acid + NaCl',
-                   color='#D55E00', edgecolor='black', linewidth=0.5)
+    ax.bar(x - width/2, vals_ringer, width, label="Ringer's Solution",
+           color='#4682B4', edgecolor='black', linewidth=0.5)
+    ax.bar(x + width/2, vals_lac, width, label="Lactic Acid + NaCl",
+           color='#D55E00', edgecolor='black', linewidth=0.5)
     
-    # Add error bars if available
     if f'{element}_err' in df_ringer.columns:
         ax.errorbar(x - width/2, vals_ringer, yerr=df_ringer[f'{element}_err'].values,
-                   fmt='none', ecolor='black', capsize=3)
+                    fmt='none', ecolor='black', capsize=3)
     if f'{element}_err' in df_lac.columns:
         ax.errorbar(x + width/2, vals_lac, yerr=df_lac[f'{element}_err'].values,
-                   fmt='none', ecolor='black', capsize=3)
+                    fmt='none', ecolor='black', capsize=3)
     
     ax.set_xlabel('Sample', fontsize=font_size, fontweight='bold')
     ax.set_ylabel(f'{element} Concentration (mg/L)', fontsize=font_size, fontweight='bold')
@@ -396,9 +338,8 @@ def plot_solution_comparison(df_ringer, df_lac, element, font_size=12):
     ax.set_xticklabels(df_ringer['Sample'], rotation=45, ha='right', fontsize=font_size-1)
     ax.legend(frameon=False, fontsize=font_size, loc='upper left')
     ax.set_title(f'{element} Release: Ringer\'s vs Lactic Acid Solution', 
-                fontsize=font_size+2, fontweight='bold')
+                 fontsize=font_size+2, fontweight='bold')
     ax.grid(axis='y', linestyle='--', alpha=0.3)
-    
     plt.tight_layout()
     return set_font_sizes(fig, font_size)
 
@@ -406,14 +347,12 @@ def plot_solution_comparison(df_ringer, df_lac, element, font_size=12):
 # MAIN APP INTERFACE
 # ============================================
 
-# Sidebar - Global controls
 st.sidebar.header("🎛️ Global Settings")
 font_size = st.sidebar.slider("Font Size (pts)", 8, 20, 12, help="Base font size for all plots")
 color_palette = st.sidebar.selectbox("Color Palette", ["viridis", "plasma", "Set2", "tab10", "Set1", "husl"])
 plot_engine = st.sidebar.selectbox("Plot Engine", ["Matplotlib (Static)", "Plotly (Interactive)"], 
                                    help="Matplotlib for publication, Plotly for exploration")
 
-# Data selection
 st.sidebar.markdown("---")
 st.sidebar.header("📊 Data Selection")
 timepoint = st.sidebar.selectbox("Time Point", ["7 days", "1 month"])
@@ -421,15 +360,12 @@ solution_type = st.sidebar.multiselect("Solutions to Compare",
                                         ["Ringer's Solution", "Lactic Acid + NaCl"],
                                         default=["Ringer's Solution"])
 
-# Load appropriate data
-if "Ringer's Solution" in solution_type:
-    df_ringer_7d = create_ringer_7d()
-    df_ringer_1m = create_ringer_1m()
-if "Lactic Acid + NaCl" in solution_type:
-    df_lac_7d = create_lac_7d()
-    df_lac_1m = create_lac_1m()
+# Load data
+df_ringer_7d = create_ringer_7d()
+df_ringer_1m = create_ringer_1m()
+df_lac_7d = create_lac_7d()
+df_lac_1m = create_lac_1m()
 
-# Main content
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📊 Bar & Comparison", 
     "🔬 Advanced Analytics", 
@@ -443,20 +379,17 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 # ============================================
 with tab1:
     st.header("Classic Bar Charts & Comparisons")
-    
     col1, col2 = st.columns([1, 2])
     
     with col1:
+        available_elements = set()
         if "Ringer's Solution" in solution_type:
-            df_current_ringer = df_ringer_7d if timepoint == "7 days" else df_ringer_1m
-            available_elements_ringer = [col for col in df_current_ringer.columns if col not in ['Sample', 'Sample_clean'] and not col.endswith('_err')]
+            df_temp = df_ringer_7d if timepoint == "7 days" else df_ringer_1m
+            available_elements |= set([c for c in df_temp.columns if not c.endswith('_err') and c != 'Sample'])
         if "Lactic Acid + NaCl" in solution_type:
-            df_current_lac = df_lac_7d if timepoint == "7 days" else df_lac_1m
-            available_elements_lac = [col for col in df_current_lac.columns if col not in ['Sample', 'Sample_clean'] and not col.endswith('_err')]
-        
-        available_elements = list(set(available_elements_ringer if "Ringer's Solution" in solution_type else []) | 
-                                  set(available_elements_lac if "Lactic Acid + NaCl" in solution_type else []))
-        
+            df_temp = df_lac_7d if timepoint == "7 days" else df_lac_1m
+            available_elements |= set([c for c in df_temp.columns if not c.endswith('_err') and c != 'Sample'])
+        available_elements = sorted(list(available_elements))
         selected_elements = st.multiselect("Select Elements", available_elements, default=available_elements[:3])
     
     with col2:
@@ -465,48 +398,39 @@ with tab1:
     if selected_elements:
         if plot_type == "Grouped Bars":
             for sol in solution_type:
-                if sol == "Ringer's Solution":
-                    df_current = df_ringer_7d if timepoint == "7 days" else df_ringer_1m
-                    fig = plot_grouped_bars_matplotlib(df_current, selected_elements, 
-                                                       f"{sol} - {timepoint}", "Concentration (mg/L)",
-                                                       font_size, color_palette)
-                    st.pyplot(fig)
-                    if st.button(f"Download {sol} Plot", key=f"download_bar_{sol}"):
-                        st.markdown(download_figure_matplotlib(fig, f"{sol}_{timepoint}_bars"), unsafe_allow_html=True)
+                df_current = df_ringer_7d if timepoint == "7 days" else df_ringer_1m if sol == "Ringer's Solution" else df_lac_7d if timepoint == "7 days" else df_lac_1m
+                fig = plot_grouped_bars_matplotlib(df_current, selected_elements, 
+                                                   f"{sol} - {timepoint}", "Concentration (mg/L)",
+                                                   font_size, color_palette)
+                st.pyplot(fig)
+                if st.button(f"Download {sol} Bar Plot", key=f"dl_bar_{sol}"):
+                    st.markdown(download_figure_matplotlib(fig, f"{sol}_{timepoint}_bars"), unsafe_allow_html=True)
         
         elif plot_type == "Scatter Plot" and len(selected_elements) >= 2:
-            col1, col2 = st.columns(2)
-            with col1:
-                x_element = st.selectbox("X-axis Element", selected_elements, key="scatter_x")
-            with col2:
-                y_element = st.selectbox("Y-axis Element", selected_elements, key="scatter_y")
+            cx, cy = st.columns(2)
+            with cx: x_el = st.selectbox("X-axis", selected_elements, key="sx")
+            with cy: y_el = st.selectbox("Y-axis", selected_elements, key="sy")
             
             for sol in solution_type:
-                if sol == "Ringer's Solution":
-                    df_current = df_ringer_7d if timepoint == "7 days" else df_ringer_1m
-                    fig = plot_scatter_plot(df_current, x_element, y_element, font_size)
-                    st.pyplot(fig)
-                    if st.button(f"Download {sol} Scatter", key=f"download_scatter_{sol}"):
-                        st.markdown(download_figure_matplotlib(fig, f"{sol}_{timepoint}_scatter"), unsafe_allow_html=True)
+                df_current = df_ringer_7d if timepoint == "7 days" else df_ringer_1m if sol == "Ringer's Solution" else df_lac_7d if timepoint == "7 days" else df_lac_1m
+                fig = plot_scatter_plot(df_current, x_el, y_el, font_size)
+                st.pyplot(fig)
+                if st.button(f"Download {sol} Scatter", key=f"dl_sc_{sol}"):
+                    st.markdown(download_figure_matplotlib(fig, f"{sol}_{timepoint}_scatter"), unsafe_allow_html=True)
         
         elif plot_type == "Radar Chart":
-            samples_to_plot = st.multiselect("Select Samples for Radar Chart", 
-                                            df_current_ringer['Sample'].tolist() if "Ringer's Solution" in solution_type else df_current_lac['Sample'].tolist(),
-                                            default=df_current_ringer['Sample'].tolist()[:4] if "Ringer's Solution" in solution_type else df_current_lac['Sample'].tolist()[:4])
-            
-            if samples_to_plot:
-                for sol in solution_type:
-                    if sol == "Ringer's Solution":
-                        df_current = df_ringer_7d if timepoint == "7 days" else df_ringer_1m
-                        fig = plot_radar_chart(df_current, samples_to_plot, selected_elements, font_size)
-                        st.pyplot(fig)
+            df_radar = df_ringer_7d if timepoint == "7 days" and "Ringer's Solution" in solution_type else df_lac_7d if "Lactic Acid + NaCl" in solution_type else df_ringer_1m
+            samples_avail = df_radar['Sample'].tolist()
+            samples_plot = st.multiselect("Samples", samples_avail, default=samples_avail[:3])
+            if samples_plot:
+                fig = plot_radar_chart(df_radar, samples_plot, selected_elements, font_size)
+                st.pyplot(fig)
         
         elif plot_type == "Violin Plot":
             for sol in solution_type:
-                if sol == "Ringer's Solution":
-                    df_current = df_ringer_7d if timepoint == "7 days" else df_ringer_1m
-                    fig = plot_violin_distribution(df_current, selected_elements, font_size)
-                    st.pyplot(fig)
+                df_current = df_ringer_7d if timepoint == "7 days" else df_ringer_1m if sol == "Ringer's Solution" else df_lac_7d if timepoint == "7 days" else df_lac_1m
+                fig = plot_violin_distribution(df_current, selected_elements, font_size)
+                st.pyplot(fig)
 
 # ============================================
 # TAB 2: ADVANCED ANALYTICS
@@ -515,29 +439,30 @@ with tab2:
     st.header("🔬 Statistical & Distribution Analysis")
     
     if len(solution_type) > 0:
-        df_current = df_ringer_7d if timepoint == "7 days" and "Ringer's Solution" in solution_type else df_ringer_1m if "Ringer's Solution" in solution_type else df_lac_7d if "Lactic Acid + NaCl" in solution_type else df_lac_1m
+        if "Ringer's Solution" in solution_type:
+            df_current = df_ringer_7d if timepoint == "7 days" else df_ringer_1m
+        else:
+            df_current = df_lac_7d if timepoint == "7 days" else df_lac_1m
         
-        elements_avail = [col for col in df_current.columns if col not in ['Sample', 'Sample_clean'] and not col.endswith('_err')]
-        
-        analysis_type = st.selectbox("Analysis Type", 
-                                    ["Correlation Matrix", "Box Plots", "Statistical Summary", "ANOVA Test"])
+        elements_avail = [c for c in df_current.columns if not c.endswith('_err') and c != 'Sample']
+        analysis_type = st.selectbox("Analysis Type", ["Correlation Matrix", "Box Plots", "Statistical Summary", "ANOVA Test"])
         
         if analysis_type == "Correlation Matrix":
-            selected_corr = st.multiselect("Select Elements for Correlation", elements_avail, default=elements_avail[:4])
-            if len(selected_corr) >= 2:
-                corr_matrix = df_current[selected_corr].corr()
+            sel_corr = st.multiselect("Elements", elements_avail, default=elements_avail[:4])
+            if len(sel_corr) >= 2:
+                corr = df_current[sel_corr].corr()
                 fig, ax = plt.subplots(figsize=(10, 8))
-                sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', center=0, 
-                           square=True, linewidths=1, cbar_kws={"shrink": 0.8}, ax=ax)
+                sns.heatmap(corr, annot=True, cmap='coolwarm', center=0, square=True, 
+                           linewidths=1, cbar_kws={"shrink": 0.8}, ax=ax)
                 ax.set_title('Element Correlation Matrix', fontsize=font_size+2, fontweight='bold')
                 st.pyplot(fig)
         
         elif analysis_type == "Box Plots":
-            df_melted = df_current.melt(id_vars=['Sample'], value_vars=selected_corr if 'selected_corr' in locals() else elements_avail[:4],
-                                       var_name='Element', value_name='Concentration')
+            df_m = df_current.melt(id_vars=['Sample'], value_vars=elements_avail[:5],
+                                   var_name='Element', value_name='Concentration')
             fig, ax = plt.subplots(figsize=(12, 6))
-            df_melted.boxplot(column='Concentration', by='Element', ax=ax)
-            ax.set_title('Element Concentration Distribution', fontsize=font_size+2, fontweight='bold')
+            df_m.boxplot(column='Concentration', by='Element', ax=ax)
+            ax.set_title('Concentration Distribution', fontsize=font_size+2, fontweight='bold')
             ax.set_xlabel('Element', fontsize=font_size)
             ax.set_ylabel('Concentration (mg/L)', fontsize=font_size)
             plt.suptitle('')
@@ -545,11 +470,198 @@ with tab2:
         
         elif analysis_type == "Statistical Summary":
             st.dataframe(df_current[elements_avail].describe().round(4))
-            
-            # Add coefficient of variation
             cv = df_current[elements_avail].std() / df_current[elements_avail].mean() * 100
-            st.write("**Coefficient of Variation (%)**")
+            st.subheader("Coefficient of Variation (%)")
             st.dataframe(cv.round(2))
+        
+        elif analysis_type == "ANOVA Test":
+            st.info("One-way ANOVA comparing element means across samples")
+            if SCIPY_AVAILABLE:
+                for el in elements_avail[:3]:
+                    stat, p = stats.f_oneway(df_current[el].dropna())
+                    st.write(f"**{el}**: F-statistic not applicable for single sample set. Use `stats.f_oneway(group1, group2, ...)` with multiple groups.")
+            else:
+                st.warning("scipy not installed")
 
 # ============================================
-#
+# TAB 3: MODERN VISUALIZATIONS
+# ============================================
+with tab3:
+    st.header("🎨 Modern Visualizations")
+    
+    if "Ringer's Solution" in solution_type:
+        df_mod = df_ringer_7d if timepoint == "7 days" else df_ringer_1m
+    else:
+        df_mod = df_lac_7d if timepoint == "7 days" else df_lac_1m
+    
+    elements_mod = [c for c in df_mod.columns if not c.endswith('_err') and c != 'Sample']
+    
+    viz_type = st.selectbox("Visualization Type", ["Stacked Bar", "Line Chart", "Element Stacking %", "Pairplot"])
+    
+    if viz_type == "Stacked Bar":
+        sel_stacked = st.multiselect("Elements to Stack", elements_mod, default=elements_mod[:3])
+        if sel_stacked:
+            fig, ax = plt.subplots(figsize=(12, 7))
+            df_plot = df_mod.set_index('Sample')[sel_stacked]
+            df_plot.plot(kind='bar', stacked=True, ax=ax, colormap=color_palette)
+            ax.set_ylabel('Concentration (mg/L)', fontsize=font_size, fontweight='bold')
+            ax.set_title(f'Stacked Bar: {timepoint}', fontsize=font_size+2, fontweight='bold')
+            ax.tick_params(axis='x', rotation=45)
+            ax.legend(loc='upper left', bbox_to_anchor=(1, 1), fontsize=font_size-1)
+            ax.grid(axis='y', alpha=0.3)
+            plt.tight_layout()
+            st.pyplot(set_font_sizes(fig, font_size))
+    
+    elif viz_type == "Line Chart":
+        sel_line = st.multiselect("Elements", elements_mod, default=['Co', 'Cr'])
+        if sel_line:
+            fig, ax = plt.subplots(figsize=(12, 6))
+            for el in sel_line:
+                ax.plot(df_mod['Sample'], df_mod[el], marker='o', label=el, linewidth=2)
+            ax.set_ylabel('Concentration (mg/L)', fontsize=font_size, fontweight='bold')
+            ax.set_title(f'Trend Lines: {timepoint}', fontsize=font_size+2, fontweight='bold')
+            ax.tick_params(axis='x', rotation=45)
+            ax.legend(fontsize=font_size-1)
+            ax.grid(True, alpha=0.3)
+            plt.tight_layout()
+            st.pyplot(set_font_sizes(fig, font_size))
+    
+    elif viz_type == "Element Stacking %":
+        df_pct = df_mod[elements_mod].div(df_mod[elements_mod].sum(axis=1), axis=0) * 100
+        fig, ax = plt.subplots(figsize=(12, 7))
+        df_pct.plot(kind='bar', stacked=True, ax=ax, colormap='Pastel1')
+        ax.set_ylabel('Relative Composition (%)', fontsize=font_size, fontweight='bold')
+        ax.set_title(f'Element Composition (%): {timepoint}', fontsize=font_size+2, fontweight='bold')
+        ax.tick_params(axis='x', rotation=45)
+        ax.legend(loc='upper left', bbox_to_anchor=(1, 1), fontsize=font_size-1)
+        plt.tight_layout()
+        st.pyplot(set_font_sizes(fig, font_size))
+    
+    elif viz_type == "Pairplot":
+        sel_pair = st.multiselect("Elements (max 5 for performance)", elements_mod, default=elements_mod[:3])
+        if len(sel_pair) >= 2:
+            with st.spinner("Generating pairplot..."):
+                g = sns.pairplot(df_mod[sel_pair], diag_kind='kde', corner=False, 
+                                 plot_kws={'alpha': 0.7}, height=3)
+                g.fig.suptitle(f'Pairwise Relationships: {timepoint}', y=1.02, fontsize=font_size+2)
+                st.pyplot(g.fig)
+
+# ============================================
+# TAB 4: INTERACTIVE PLOTLY
+# ============================================
+with tab4:
+    st.header("📈 Interactive Plotly Visualizations")
+    
+    if not PLOTLY_AVAILABLE:
+        st.error("⚠️ Plotly is not installed. Run `pip install plotly`")
+    else:
+        df_pl = df_ringer_7d if timepoint == "7 days" else df_ringer_1m if "Ringer's Solution" in solution_type else df_lac_7d if timepoint == "7 days" else df_lac_1m
+        elements_pl = [c for c in df_pl.columns if not c.endswith('_err') and c != 'Sample']
+        
+        plotly_type = st.selectbox("Plotly Chart Type", 
+                                   ["3D Scatter", "Heatmap", "Sunburst", "Parallel Coordinates", "Bubble Chart", "Donut Comparison"])
+        
+        if plotly_type == "3D Scatter" and len(elements_pl) >= 3:
+            x3, y3, z3 = st.columns(3)
+            with x3: xe = st.selectbox("X", elements_pl, key="px")
+            with y3: ye = st.selectbox("Y", elements_pl, key="py")
+            with z3: ze = st.selectbox("Z", elements_pl, key="pz")
+            fig = plot_3d_scatter(df_pl, xe, ye, ze, font_size)
+            st.plotly_chart(fig, use_container_width=True)
+        
+        elif plotly_type == "Heatmap":
+            sel_heat = st.multiselect("Elements", elements_pl, default=elements_pl[:5])
+            if len(sel_heat) >= 2:
+                fig = plot_heatmap(df_pl, sel_heat, font_size)
+                st.plotly_chart(fig, use_container_width=True)
+        
+        elif plotly_type == "Sunburst":
+            fig = plot_sunburst(df_pl, elements_pl)
+            st.plotly_chart(fig, use_container_width=True)
+        
+        elif plotly_type == "Parallel Coordinates":
+            fig = plot_parallel_coordinates(df_pl, elements_pl, font_size)
+            st.plotly_chart(fig, use_container_width=True)
+        
+        elif plotly_type == "Bubble Chart":
+            bx, by, bs = st.columns(3)
+            with bx: bxe = st.selectbox("X", elements_pl, key="bx")
+            with by: bye = st.selectbox("Y", elements_pl, key="by")
+            with bs: bse = st.selectbox("Size", elements_pl, key="bs")
+            fig = plot_bubble_chart(df_pl, bxe, bye, bse, font_size)
+            st.plotly_chart(fig, use_container_width=True)
+        
+        elif plotly_type == "Donut Comparison" and "Ringer's Solution" in solution_type and "Lactic Acid + NaCl" in solution_type:
+            el_donut = st.selectbox("Element", elements_pl)
+            df_r_donut = df_ringer_7d if timepoint == "7 days" else df_ringer_1m
+            df_l_donut = df_lac_7d if timepoint == "7 days" else df_lac_1m
+            fig = plot_donut_comparison(df_r_donut, df_l_donut, el_donut, font_size)
+            st.plotly_chart(fig, use_container_width=True)
+
+# ============================================
+# TAB 5: SOLUTION COMPARISON
+# ============================================
+with tab5:
+    st.header("⚖️ Solution Comparison")
+    
+    if "Ringer's Solution" not in solution_type or "Lactic Acid + NaCl" not in solution_type:
+        st.warning("⚠️ Please select both Ringer's Solution and Lactic Acid + NaCl in the sidebar for comparison.")
+    else:
+        df_r_comp = df_ringer_7d if timepoint == "7 days" else df_ringer_1m
+        df_l_comp = df_lac_7d if timepoint == "7 days" else df_lac_1m
+        
+        common_elements = set([c for c in df_r_comp.columns if not c.endswith('_err') and c != 'Sample']) & \
+                          set([c for c in df_l_comp.columns if not c.endswith('_err') and c != 'Sample'])
+        common_elements = sorted(list(common_elements))
+        
+        comp_type = st.selectbox("Comparison Type", ["Side-by-Side Bars", "Fold Change", "Statistical Summary"])
+        
+        if comp_type == "Side-by-Side Bars":
+            el_comp = st.selectbox("Element to Compare", common_elements)
+            fig = plot_solution_comparison(df_r_comp, df_l_comp, el_comp, font_size)
+            st.pyplot(fig)
+            if st.button(f"Download Comparison Plot"):
+                st.markdown(download_figure_matplotlib(fig, f"comparison_{el_comp}"), unsafe_allow_html=True)
+        
+        elif comp_type == "Fold Change":
+            st.info("Fold Change = (Lactic Acid) / (Ringer's Solution)")
+            fc_data = {}
+            for el in common_elements:
+                fc = df_l_comp[el].mean() / df_r_comp[el].mean()
+                fc_data[el] = fc
+            fc_df = pd.DataFrame(list(fc_data.items()), columns=['Element', 'Fold Change'])
+            
+            fig, ax = plt.subplots(figsize=(10, 6))
+            bars = ax.bar(fc_df['Element'], fc_df['Fold Change'], 
+                          color=fc_df['Fold Change'].apply(lambda x: '#D55E00' if x > 1 else '#4682B4'),
+                          edgecolor='black', linewidth=0.5)
+            ax.axhline(y=1, color='black', linestyle='--', linewidth=1, label='No Change')
+            ax.set_ylabel('Fold Change (LAC / Ringer)', fontsize=font_size, fontweight='bold')
+            ax.set_title(f'Element Release Fold Change: {timepoint}', fontsize=font_size+2, fontweight='bold')
+            ax.legend(fontsize=font_size-1)
+            ax.grid(axis='y', alpha=0.3)
+            for bar, val in zip(bars, fc_df['Fold Change']):
+                ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.1, 
+                        f'{val:.2f}x', ha='center', va='bottom', fontsize=font_size-1, fontweight='bold')
+            plt.tight_layout()
+            st.pyplot(set_font_sizes(fig, font_size))
+        
+        elif comp_type == "Statistical Summary":
+            st.subheader("Ringer's Solution")
+            st.dataframe(df_r_comp[common_elements].describe().round(4))
+            st.subheader("Lactic Acid + NaCl")
+            st.dataframe(df_l_comp[common_elements].describe().round(4))
+            
+            # Comparative table
+            comp_table = pd.DataFrame({
+                'Element': common_elements,
+                'Ringer Mean': [df_r_comp[e].mean() for e in common_elements],
+                'LAC Mean': [df_l_comp[e].mean() for e in common_elements],
+                'Difference': [df_l_comp[e].mean() - df_r_comp[e].mean() for e in common_elements],
+                'Fold Change': [df_l_comp[e].mean() / df_r_comp[e].mean() for e in common_elements]
+            }).round(4)
+            st.dataframe(comp_table)
+
+# Footer
+st.markdown("---")
+st.caption("📊 ICP-AES Visualization Suite | Requires: streamlit, pandas, numpy, matplotlib, seaborn, plotly, kaleido, scipy")
