@@ -6,3 +6,5 @@ seaborn
 openpyxl
 numba
 plotly
+kaleido
+scipy
