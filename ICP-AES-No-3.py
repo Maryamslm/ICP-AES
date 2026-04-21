@@ -576,4 +576,4 @@ def plot_sunburst(df, elements, font_size, font_family, publication_style):
 
 def plot_parallel_coordinates(df, elements, font_size, font_family, publication_style):
     fig = px.parallel_coordinates(df, dimensions=elements,
-                                  color='Co' if 'Co' in df.columns else elements[0
+                                  color='Co' if
