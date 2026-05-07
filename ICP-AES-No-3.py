@@ -32,151 +32,6 @@ except ImportError:
     SCIPY_AVAILABLE = False
 
 # ============================================
-# SAMPLE CATEGORIZATION FUNCTIONS
-# ============================================
-
-def extract_category_from_name(sample_name, categorization_rule):
-    """
-    Extract category from sample name based on user-defined rules.
-    
-    Categorization rules:
-    - 'prefix': Extract first part before '-' (e.g., CH0, PH45)
-    - 'suffix': Extract last part after '-' (e.g., Ringer-7D, LAC-1M)
-    - 'material': Extract material code (CH, PH, CNH, PNH)
-    - 'condition': Extract condition (0, 45)
-    - 'custom': User-defined position
-    """
-    if categorization_rule == 'prefix':
-        return sample_name.split('-')[0] if '-' in sample_name else sample_name
-    elif categorization_rule == 'suffix':
-        return sample_name.split('-')[-1] if '-' in sample_name else sample_name
-    elif categorization_rule == 'material':
-        # Extract material prefix (CH, PH, CNH, PNH)
-        parts = sample_name.split('-')
-        if parts:
-            material = parts[0][:2] if parts[0].startswith(('CH', 'PH')) else parts[0][:3] if parts[0].startswith(('CNH', 'PNH')) else parts[0]
-            return material
-        return sample_name
-    elif categorization_rule == 'condition':
-        # Extract condition number (0, 45)
-        parts = sample_name.split('-')
-        if parts:
-            # Look for numbers in the first part
-            import re
-            numbers = re.findall(r'\d+', parts[0])
-            return numbers[0] if numbers else 'unknown'
-        return 'unknown'
-    elif categorization_rule == 'custom':
-        # Custom extraction - user provides position
-        return sample_name  # Will be handled by custom position
-    else:
-        return sample_name
-
-def apply_custom_categorization(df, position, delimiter='-'):
-    """Apply custom categorization based on position in split string."""
-    df_cat = df.copy()
-    categories = []
-    for sample in df_cat['Sample']:
-        parts = sample.split(delimiter)
-        if len(parts) > position:
-            categories.append(parts[position])
-        else:
-            categories.append(sample)
-    df_cat['Category'] = categories
-    return df_cat
-
-def get_available_categories(df, categorization_rule, custom_position=0, custom_delimiter='-'):
-    """Get available categories based on the selected rule."""
-    categories = set()
-    for sample in df['Sample']:
-        if categorization_rule == 'custom':
-            parts = sample.split(custom_delimiter)
-            if len(parts) > custom_position:
-                categories.add(parts[custom_position])
-            else:
-                categories.add(sample)
-        else:
-            categories.add(extract_category_from_name(sample, categorization_rule))
-    return sorted(list(categories))
-
-def categorize_samples(df, categorization_rule, selected_categories=None, 
-                       custom_position=0, custom_delimiter='-'):
-    """
-    Categorize samples and optionally filter by selected categories.
-    """
-    df_cat = df.copy()
-    
-    if categorization_rule == 'custom':
-        df_cat = apply_custom_categorization(df_cat, custom_position, custom_delimiter)
-    else:
-        df_cat['Category'] = df_cat['Sample'].apply(
-            lambda x: extract_category_from_name(x, categorization_rule)
-        )
-    
-    # Filter by selected categories if provided
-    if selected_categories and len(selected_categories) > 0:
-        df_cat = df_cat[df_cat['Category'].isin(selected_categories)]
-    
-    return df_cat
-
-def get_grouped_data_by_category(df, group_by_prefix=False, categorization_rule=None, 
-                                 selected_categories=None, custom_position=0, custom_delimiter='-'):
-    """
-    Return data with grouping by either prefix or user-defined categories.
-    Enhanced to support sample name categorization.
-    """
-    if categorization_rule and categorization_rule != 'none':
-        # Apply user-defined categorization
-        df_cat = categorize_samples(df, categorization_rule, selected_categories,
-                                   custom_position, custom_delimiter)
-        group_col = 'Category'
-    elif group_by_prefix:
-        # Use original prefix-based grouping
-        df_cat = df.copy()
-        df_cat['Category'] = df_cat['Sample'].apply(lambda x: x.split('-')[0])
-        group_col = 'Category'
-    else:
-        # No grouping, return as is
-        return df.copy()
-    
-    # Ensure categorical ordering
-    if selected_categories:
-        df_cat['Category'] = pd.Categorical(df_cat['Category'], categories=selected_categories, ordered=True)
-    else:
-        unique_cats = sorted(df_cat['Category'].unique())
-        df_cat['Category'] = pd.Categorical(df_cat['Category'], categories=unique_cats, ordered=True)
-    
-    df_cat = df_cat.sort_values('Category')
-    
-    # Get value columns (exclude metadata columns)
-    val_cols = [c for c in df_cat.columns if not c.endswith('_err') and c not in ['Sample', 'Category']]
-    
-    # Group by category
-    result_data = {'Sample': []}  # 'Sample' will hold category names for compatibility
-    for c in val_cols:
-        result_data[c] = []
-        result_data[f'{c}_err'] = []
-    
-    for category_name, group_df in df_cat.groupby('Category'):
-        result_data['Sample'].append(category_name)
-        for c in val_cols:
-            vals = group_df[c].dropna()
-            result_data[c].append(vals.mean() if len(vals) > 0 else 0.0)
-            err_col = f'{c}_err'
-            if err_col in group_df.columns:
-                errs = group_df[err_col].dropna()
-                if len(errs) > 1:
-                    result_data[err_col].append(errs.sem())
-                elif len(errs) == 1:
-                    result_data[err_col].append(errs.values[0])
-                else:
-                    result_data[err_col].append(0.0)
-            else:
-                result_data[err_col].append(0.0)
-    
-    return pd.DataFrame(result_data)
-
-# ============================================
 # SAFE COLOR RESOLVER (FIXES PALETTE KEYERROR)
 # ============================================
 
@@ -340,62 +195,58 @@ def create_lac_1m():
 # HELPER FUNCTIONS
 # ============================================
 
-def get_grouped_data(df, group_by_prefix=False, categorization_rule=None, 
-                     selected_categories=None, custom_position=0, custom_delimiter='-'):
-    """Return data with optional grouping. Enhanced with categorization."""
-    if categorization_rule and categorization_rule != 'none':
-        return get_grouped_data_by_category(df, group_by_prefix, categorization_rule,
-                                           selected_categories, custom_position, custom_delimiter)
-    elif group_by_prefix:
-        df_g = df.copy()
-        df_g['Group'] = df_g['Sample'].apply(lambda x: x.split('-')[0])
+def get_grouped_data(df, group_by_prefix=False):
+    """Return data with optional grouping. Robust dictionary builder prevents column collisions."""
+    if not group_by_prefix:
+        return df.copy()
         
-        all_prefixes = ['CH0', 'PH0', 'CNH0', 'PNH0', 'CH45', 'PH45', 'CNH45', 'PNH45']
-        valid = [p for p in all_prefixes if p in df_g['Group'].values]
-        df_g['Group'] = pd.Categorical(df_g['Group'], categories=valid, ordered=True)
-        df_g = df_g.sort_values('Group')
+    df_g = df.copy()
+    df_g['Group'] = df_g['Sample'].apply(lambda x: x.split('-')[0])
+    
+    all_prefixes = ['CH0', 'PH0', 'CNH0', 'PNH0', 'CH45', 'PH45', 'CNH45', 'PNH45']
+    valid = [p for p in all_prefixes if p in df_g['Group'].values]
+    df_g['Group'] = pd.Categorical(df_g['Group'], categories=valid, ordered=True)
+    df_g = df_g.sort_values('Group')
+    
+    val_cols = [c for c in df_g.columns if not c.endswith('_err') and c not in ['Sample', 'Group']]
+    
+    result_data = {'Sample': []}
+    for c in val_cols:
+        result_data[c] = []
+        result_data[f'{c}_err'] = []
         
-        val_cols = [c for c in df_g.columns if not c.endswith('_err') and c not in ['Sample', 'Group']]
-        
-        result_data = {'Sample': []}
+    for group_name, group_df in df_g.groupby('Group'):
+        result_data['Sample'].append(group_name)
         for c in val_cols:
-            result_data[c] = []
-            result_data[f'{c}_err'] = []
-            
-        for group_name, group_df in df_g.groupby('Group'):
-            result_data['Sample'].append(group_name)
-            for c in val_cols:
-                vals = group_df[c].dropna()
-                result_data[c].append(vals.mean() if len(vals) > 0 else 0.0)
-                err_col = f'{c}_err'
-                if err_col in group_df.columns:
-                    errs = group_df[err_col].dropna()
-                    if len(errs) > 1:
-                        result_data[err_col].append(errs.sem())
-                    elif len(errs) == 1:
-                        result_data[err_col].append(errs.values[0])
-                    else:
-                        result_data[err_col].append(0.0)
+            vals = group_df[c].dropna()
+            result_data[c].append(vals.mean() if len(vals) > 0 else 0.0)
+            err_col = f'{c}_err'
+            if err_col in group_df.columns:
+                errs = group_df[err_col].dropna()
+                if len(errs) > 1:
+                    result_data[err_col].append(errs.sem())
+                elif len(errs) == 1:
+                    result_data[err_col].append(errs.values[0])
                 else:
                     result_data[err_col].append(0.0)
-                    
-        return pd.DataFrame(result_data)
-    else:
-        return df.copy()
+            else:
+                result_data[err_col].append(0.0)
+                
+    return pd.DataFrame(result_data)
 
 def download_figure_matplotlib(fig, filename):
     buf = BytesIO()
     fig.savefig(buf, format='png', dpi=300, bbox_inches='tight', facecolor='white')
     buf.seek(0)
     b64 = base64.b64encode(buf.read()).decode()
-    href = f'<a href="data:image/png;base64,{b64}" download="{filename}.png">📥 Download {filename}.png</a>'
+    href = f'<a href="image/png;base64,{b64}" download="{filename}.png">📥 Download {filename}.png</a>'
     return href
 
 def download_figure_plotly(fig, filename):
     if KALEIDO_AVAILABLE:
         img_bytes = fig.to_image(format="png", width=1200, height=800, scale=2)
         b64 = base64.b64encode(img_bytes).decode()
-        href = f'<a href="data:image/png;base64,{b64}" download="{filename}.png">📥 Download {filename}.png</a>'
+        href = f'<a href="image/png;base64,{b64}" download="{filename}.png">📥 Download {filename}.png</a>'
         return href
     return "⚠️ `kaleido` not installed for Plotly export"
 
@@ -403,9 +254,8 @@ def download_figure_plotly(fig, filename):
 # MATPLOTLIB VISUALIZATIONS
 # ============================================
 
-def plot_grouped_bars_matplotlib(df, elements, title, ylabel, font_size, color_palette, group_by=False, 
-                                 categorization_rule=None, selected_categories=None, custom_position=0, custom_delimiter='-'):
-    df = get_grouped_data(df, group_by, categorization_rule, selected_categories, custom_position, custom_delimiter)
+def plot_grouped_bars_matplotlib(df, elements, title, ylabel, font_size, color_palette, group_by=False):
+    df = get_grouped_data(df, group_by)
     samples = df['Sample'].tolist()
     x = np.arange(len(samples))
     width = 0.8 / len(elements) if len(elements) > 0 else 0.8
@@ -439,9 +289,8 @@ def plot_grouped_bars_matplotlib(df, elements, title, ylabel, font_size, color_p
     plt.tight_layout()
     return fig
 
-def plot_scatter_plot(df, x_element, y_element, font_size, group_by=False,
-                      categorization_rule=None, selected_categories=None, custom_position=0, custom_delimiter='-'):
-    df = get_grouped_data(df, group_by, categorization_rule, selected_categories, custom_position, custom_delimiter)
+def plot_scatter_plot(df, x_element, y_element, font_size, group_by=False):
+    df = get_grouped_data(df, group_by)
     fig, ax = plt.subplots(figsize=(11, 9))
     
     groups = df['Sample'].str.extract(r'(CH|PH|CNH|PNH)')[0].fillna('Unknown')
@@ -483,9 +332,8 @@ def plot_scatter_plot(df, x_element, y_element, font_size, group_by=False,
     plt.tight_layout()
     return fig
 
-def plot_radar_chart(df, sample_names, elements, font_size, group_by=False,
-                     categorization_rule=None, selected_categories=None, custom_position=0, custom_delimiter='-'):
-    df = get_grouped_data(df, group_by, categorization_rule, selected_categories, custom_position, custom_delimiter)
+def plot_radar_chart(df, sample_names, elements, font_size, group_by=False):
+    df = get_grouped_data(df, group_by)
     fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(projection='polar'))
     angles = np.linspace(0, 2 * np.pi, len(elements), endpoint=False).tolist()
     angles += angles[:1]
@@ -509,9 +357,8 @@ def plot_radar_chart(df, sample_names, elements, font_size, group_by=False,
     plt.tight_layout()
     return fig
 
-def plot_violin_distribution(df, elements, font_size, group_by=False,
-                             categorization_rule=None, selected_categories=None, custom_position=0, custom_delimiter='-'):
-    df = get_grouped_data(df, group_by, categorization_rule, selected_categories, custom_position, custom_delimiter)
+def plot_violin_distribution(df, elements, font_size, group_by=False):
+    df = get_grouped_data(df, group_by)
     df_melted = df.melt(id_vars=['Sample'], value_vars=elements, 
                         var_name='Element', value_name='Concentration')
     fig, ax = plt.subplots(figsize=(13, 7))
@@ -524,6 +371,95 @@ def plot_violin_distribution(df, elements, font_size, group_by=False,
     ax.set_title('Distribution of Element Concentrations', fontsize=font_size+2, fontweight='bold')
     ax.tick_params(axis='x', rotation=45)
     ax.grid(axis='y', linestyle='--', alpha=0.25)
+    plt.tight_layout()
+    return fig
+
+# ============================================
+# COMBINED SOLUTION VISUALIZATION (NEW FEATURE)
+# ============================================
+
+def plot_combined_solutions_bars(df_ringer, df_lac, elements, title, ylabel, font_size, color_palette, group_by=False):
+    """Plot both Ringer's and Lactic Acid solutions side-by-side for all samples in one graph."""
+    
+    # Add solution identifier to each dataframe
+    df_r = df_ringer.copy()
+    df_l = df_lac.copy()
+    df_r['Solution'] = "Ringer's"
+    df_l['Solution'] = "Lactic Acid"
+    
+    # Combine dataframes
+    df_combined = pd.concat([df_r, df_l], ignore_index=True)
+    
+    # Apply grouping if requested
+    if group_by:
+        df_combined['Group'] = df_combined['Sample'].apply(lambda x: x.split('-')[0])
+        df_combined['Display_Label'] = df_combined['Group'] + '\n(' + df_combined['Solution'] + ')'
+    else:
+        df_combined['Display_Label'] = df_combined['Sample'] + '\n(' + df_combined['Solution'] + ')'
+    
+    # Prepare plotting
+    unique_labels = df_combined['Display_Label'].unique()
+    x = np.arange(len(unique_labels))
+    width = 0.8 / len(elements) if len(elements) > 0 else 0.8
+    
+    fig, ax = plt.subplots(figsize=(16, 9))
+    colors = get_safe_colors(color_palette, len(elements))
+    
+    # Solution color mapping for clarity (edge colors)
+    solution_colors = {"Ringer's": '#3A86FF', "Lactic Acid": '#FF006E'}
+    
+    for i, element in enumerate(elements):
+        if element not in df_combined.columns:
+            continue
+        values = []
+        errors = []
+        
+        for label in unique_labels:
+            subset = df_combined[df_combined['Display_Label'] == label]
+            if len(subset) > 0:
+                val = subset[element].iloc[0]
+                err = subset[f'{element}_err'].iloc[0] if f'{element}_err' in subset.columns else 0
+                values.append(val)
+                errors.append(err)
+        
+        if not values:
+            continue
+            
+        offset = (i - len(elements)/2 + 0.5) * width
+        bars = ax.bar(x + offset, values, width, label=element, 
+                      color=colors[i], edgecolor='black', linewidth=0.8, alpha=0.95)
+        
+        # Color-code bar edges by solution for visual distinction
+        for idx, bar in enumerate(bars):
+            label = unique_labels[idx]
+            sol = "Lactic Acid" if "Lactic Acid" in label else "Ringer's"
+            bar.set_edgecolor(solution_colors[sol])
+            bar.set_linewidth(2.5)
+        
+        ax.errorbar(x + offset, values, yerr=errors, fmt='none', 
+                    ecolor='#333333', capsize=4, capthick=1.2, elinewidth=1.2)
+    
+    # Formatting
+    ax.set_xlabel('Sample (Solution)', fontsize=font_size, fontweight='bold')
+    ax.set_ylabel(ylabel, fontsize=font_size, fontweight='bold')
+    ax.set_xticks(x)
+    ax.set_xticklabels(unique_labels, rotation=45, ha='right', fontsize=font_size-2, fontweight='semibold')
+    
+    # Create dual legend: elements + solution indicators
+    element_legend = ax.legend(loc='upper left', bbox_to_anchor=(0.02, 1), frameon=True, 
+                               fontsize=font_size-1, title='Elements', title_fontsize=font_size)
+    ax.add_artist(element_legend)
+    
+    from matplotlib.patches import Patch
+    solution_legend_elements = [Patch(facecolor='white', edgecolor=solution_colors[s], 
+                                       label=s, linewidth=2.5) for s in ["Ringer's", "Lactic Acid"]]
+    ax.legend(handles=solution_legend_elements, loc='upper right', bbox_to_anchor=(1, 1), 
+              fontsize=font_size-1, title='Solution', title_fontsize=font_size, frameon=True)
+    
+    ax.set_title(title, fontsize=font_size+2, fontweight='bold', pad=20)
+    ax.grid(axis='y', linestyle='--', alpha=0.25)
+    ax.set_axisbelow(True)
+    
     plt.tight_layout()
     return fig
 
@@ -576,4 +512,431 @@ def plot_sunburst(df, elements, font_size, font_family, publication_style):
 
 def plot_parallel_coordinates(df, elements, font_size, font_family, publication_style):
     fig = px.parallel_coordinates(df, dimensions=elements,
-                                  color='Co' if
+                                  color='Co' if 'Co' in df.columns else elements[0],
+                                  color_continuous_scale=px.colors.diverging.Tealrose,
+                                  title='Parallel Coordinates: Multi-element Comparison')
+    fig.update_layout(font=dict(family=font_family, size=font_size))
+    return apply_plotly_style(fig, font_family, font_size, publication_style)
+
+def plot_bubble_chart(df, x_element, y_element, size_element, font_size, font_family, publication_style):
+    fig = px.scatter(df, x=x_element, y=y_element, size=size_element,
+                     color='Sample', hover_name='Sample', size_max=35,
+                     title=f'Bubble Chart: {x_element} vs {y_element} (size: {size_element})',
+                     opacity=0.85)
+    fig.update_traces(marker=dict(line=dict(width=1.5, color='black')))
+    return apply_plotly_style(fig, font_family, font_size, publication_style)
+
+def plot_donut_comparison(df_ringer, df_lac, element, font_size, font_family, publication_style):
+    fig = make_subplots(rows=1, cols=2, specs=[[{'type':'domain'}, {'type':'domain'}]],
+                        subplot_titles=["Ringer's Solution", "Lactic Acid + NaCl"])
+    labels = df_ringer['Sample'].values
+    fig.add_trace(go.Pie(labels=labels, values=df_ringer[element].values, hole=0.45, name="Ringer's",
+                         marker=dict(colors=px.colors.qualitative.Set2), textfont=dict(size=font_size-1)), row=1, col=1)
+    fig.add_trace(go.Pie(labels=labels, values=df_lac[element].values, hole=0.45, name="Lactic Acid",
+                         marker=dict(colors=px.colors.qualitative.Set2), textfont=dict(size=font_size-1)), row=1, col=2)
+    fig.update_layout(title_text=f'{element} Distribution Comparison',
+                      font=dict(family=font_family, size=font_size),
+                      title_font_size=font_size+2, width=1250, height=650)
+    return fig
+
+def plot_solution_comparison(df_ringer, df_lac, element, font_size, publication_style):
+    fig, ax = plt.subplots(figsize=(13, 7))
+    x = np.arange(len(df_ringer['Sample']))
+    width = 0.32
+    vals_ringer = np.asarray(df_ringer[element].values).ravel()
+    vals_lac = np.asarray(df_lac[element].values).ravel()
+    
+    ax.bar(x - width/2, vals_ringer, width, label="Ringer's Solution",
+           color='#3A86FF', edgecolor='black', linewidth=1, alpha=0.9)
+    ax.bar(x + width/2, vals_lac, width, label="Lactic Acid + NaCl",
+           color='#FF006E', edgecolor='black', linewidth=1, alpha=0.9)
+    
+    if f'{element}_err' in df_ringer.columns:
+        ax.errorbar(x - width/2, vals_ringer, yerr=df_ringer[f'{element}_err'].values,
+                    fmt='none', ecolor='black', capsize=4, linewidth=1.2)
+    if f'{element}_err' in df_lac.columns:
+        ax.errorbar(x + width/2, vals_lac, yerr=df_lac[f'{element}_err'].values,
+                    fmt='none', ecolor='black', capsize=4, linewidth=1.2)
+    
+    ax.set_xlabel('Sample', fontsize=font_size, fontweight='bold')
+    ax.set_ylabel(f'{element} Concentration (mg/L)', fontsize=font_size, fontweight='bold')
+    ax.set_xticks(x)
+    ax.set_xticklabels(df_ringer['Sample'], rotation=45, ha='right', fontsize=font_size-1, fontweight='semibold')
+    ax.legend(frameon=True, fontsize=font_size, loc='upper left')
+    ax.set_title(f'{element} Release: Ringer\'s vs Lactic Acid Solution', 
+                 fontsize=font_size+2, fontweight='bold')
+    ax.grid(axis='y', linestyle='--', alpha=0.3)
+    plt.tight_layout()
+    return fig
+
+# ============================================
+# MAIN APP INTERFACE
+# ============================================
+
+st.title("🔬 ICP-AES Results: Advanced Visualization Suite")
+st.markdown("### Cobalt-Chromium Alloys in Ringer's & Lactic Acid Solutions | Publication-Ready Engine")
+
+# SIDEBAR CONTROLS
+st.sidebar.header("🎛️ Appearance & Controls")
+
+col_f1, col_f2 = st.sidebar.columns(2)
+with col_f1:
+    font_family = st.selectbox("Font Family", ["sans-serif", "Arial", "Times New Roman", "Helvetica", "Georgia", "Verdana", "Courier New"])
+with col_f2:
+    font_size = st.slider("Font Size (pts)", 8, 22, 13)
+
+font_style = st.sidebar.selectbox("Font Weight/Style", ["Normal", "Bold", "Italic", "Bold-Italic"])
+color_palettes = [
+    "colorblind", "tab10", "tab20", "Set1", "Set2", "Set3", "pastel", "muted", 
+    "dark", "bright", "viridis", "plasma", "cividis", "flare", "crest", "mako",
+    "Wong (High-Contrast)", "Publication Standard"
+]
+color_palette = st.sidebar.selectbox("Color Palette", color_palettes)
+publication_style = st.sidebar.toggle("Publication Quality Mode", value=True, 
+                                      help="Removes spines, adjusts grid, optimizes for journals")
+
+# Data Controls
+st.sidebar.markdown("---")
+st.sidebar.header("📊 Data Configuration")
+group_by_prefix = st.sidebar.toggle("Group by Sample Prefix (CH0, PH0, etc.)", value=True)
+timepoint = st.sidebar.selectbox("Time Point", ["7 days", "1 month"])
+solution_type = st.sidebar.multiselect("Solutions to Compare", 
+                                        ["Ringer's Solution", "Lactic Acid + NaCl"],
+                                        default=["Ringer's Solution"])
+
+# Load Data
+df_ringer_7d = create_ringer_7d()
+df_ringer_1m = create_ringer_1m()
+df_lac_7d = create_lac_7d()
+df_lac_1m = create_lac_1m()
+
+# Apply styling globally
+apply_matplotlib_styling(font_family, font_style, font_size, publication_style)
+
+# TABS
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    "📊 Bar & Grouped Plots", 
+    "🔬 Advanced Analytics", 
+    "🎨 Modern Visualizations",
+    "📈 Interactive Plotly",
+    "⚖️ Solution Comparison"
+])
+
+# ============================================
+# TAB 1: BAR & GROUPED PLOTS
+# ============================================
+with tab1:
+    st.header("Grouped Bar Charts & Comparisons")
+    
+    col_a, col_b = st.columns([1, 2])
+    with col_a:
+        avail = set()
+        if "Ringer's Solution" in solution_type:
+            df_t = df_ringer_7d if timepoint == "7 days" else df_ringer_1m
+            avail |= set([c for c in df_t.columns if not c.endswith('_err') and c != 'Sample'])
+        if "Lactic Acid + NaCl" in solution_type:
+            df_t = df_lac_7d if timepoint == "7 days" else df_lac_1m
+            avail |= set([c for c in df_t.columns if not c.endswith('_err') and c != 'Sample'])
+        avail = sorted(list(avail))
+        selected = st.multiselect("Select Elements", avail, default=avail[:4] if avail else [])
+        
+    with col_b:
+        # Check if both solutions are selected for combined view option
+        both_solutions = len(solution_type) == 2
+        
+        if both_solutions and selected:
+            plot_type = st.radio("Plot Type", 
+                                ["Grouped Bars (Separate)", "🔄 Combined View (Both Solutions)", "Scatter Plot", "Radar Chart", "Violin Plot"], 
+                                horizontal=True, key="plot_type_tab1")
+        else:
+            plot_type = st.radio("Plot Type", 
+                                ["Grouped Bars", "Scatter Plot", "Radar Chart", "Violin Plot"], 
+                                horizontal=True, key="plot_type_tab1_single")
+    
+    if selected:
+        # === COMBINED VIEW (NEW FEATURE) ===
+        if plot_type == "🔄 Combined View (Both Solutions)" and len(solution_type) == 2:
+            df_r = df_ringer_7d if timepoint == "7 days" else df_ringer_1m
+            df_l = df_lac_7d if timepoint == "7 days" else df_lac_1m
+            fig = plot_combined_solutions_bars(df_r, df_l, selected, 
+                                               f"Combined Solutions: {timepoint}", 
+                                               "Concentration (mg/L)", 
+                                               font_size, color_palette, group_by_prefix)
+            st.pyplot(fig)
+            if st.button("📥 Download Combined Plot", key="dl_combined_bar_tab1"):
+                st.markdown(download_figure_matplotlib(fig, f"combined_{timepoint.replace(' ', '_')}_bars"), unsafe_allow_html=True)
+            st.info("💡 **Legend**: Bar fill = Element | Bar edge color = Solution (Blue=Ringer's, Pink=Lactic Acid)")
+        
+        # === SEPARATE GROUPED BARS ===
+        elif plot_type in ["Grouped Bars", "Grouped Bars (Separate)"]:
+            for sol in solution_type:
+                df_c = df_ringer_7d if timepoint == "7 days" else df_ringer_1m if sol == "Ringer's Solution" else df_lac_7d if timepoint == "7 days" else df_lac_1m
+                fig = plot_grouped_bars_matplotlib(df_c, selected, f"{sol} - {timepoint}", "Concentration (mg/L)", font_size, color_palette, group_by_prefix)
+                st.pyplot(fig)
+                if st.button(f"📥 Download {sol}", key=f"dl_{sol}_bar_tab1"):
+                    st.markdown(download_figure_matplotlib(fig, f"{sol}_{timepoint.replace(' ', '_')}_bars"), unsafe_allow_html=True)
+        
+        # === SCATTER PLOT ===
+        elif plot_type == "Scatter Plot" and len(selected) >= 2:
+            cx, cy = st.columns(2)
+            with cx: xe = st.selectbox("X-axis", selected, key="sx_tab1")
+            with cy: ye = st.selectbox("Y-axis", selected, key="sy_tab1")
+            for sol in solution_type:
+                df_c = df_ringer_7d if timepoint == "7 days" else df_ringer_1m if sol == "Ringer's Solution" else df_lac_7d if timepoint == "7 days" else df_lac_1m
+                fig = plot_scatter_plot(df_c, xe, ye, font_size, group_by_prefix)
+                st.pyplot(fig)
+                if st.button(f"📥 Download Scatter", key=f"dl_{sol}_sc_tab1"):
+                    st.markdown(download_figure_matplotlib(fig, f"{sol}_{timepoint.replace(' ', '_')}_scatter"), unsafe_allow_html=True)
+        
+        # === RADAR CHART ===
+        elif plot_type == "Radar Chart":
+            df_r = df_ringer_7d if timepoint == "7 days" else df_ringer_1m if "Ringer's Solution" in solution_type else df_lac_7d if timepoint == "7 days" else df_lac_1m
+            samps = st.multiselect("Samples", df_r['Sample'].tolist(), default=df_r['Sample'].tolist()[:4])
+            if samps:
+                fig = plot_radar_chart(df_r, samps, selected, font_size, group_by_prefix)
+                st.pyplot(fig)
+                if st.button("📥 Download Radar", key="dl_radar_tab1"):
+                    st.markdown(download_figure_matplotlib(fig, f"radar_{timepoint.replace(' ', '_')}"), unsafe_allow_html=True)
+        
+        # === VIOLIN PLOT ===
+        elif plot_type == "Violin Plot":
+            for sol in solution_type:
+                df_c = df_ringer_7d if timepoint == "7 days" else df_ringer_1m if sol == "Ringer's Solution" else df_lac_7d if timepoint == "7 days" else df_lac_1m
+                fig = plot_violin_distribution(df_c, selected, font_size, group_by_prefix)
+                st.pyplot(fig)
+                if st.button(f"📥 Download Violin", key=f"dl_{sol}_violin_tab1"):
+                    st.markdown(download_figure_matplotlib(fig, f"{sol}_{timepoint.replace(' ', '_')}_violin"), unsafe_allow_html=True)
+
+# ============================================
+# TAB 2: ADVANCED ANALYTICS
+# ============================================
+with tab2:
+    st.header("🔬 Statistical & Distribution Analysis")
+    
+    if len(solution_type) > 0:
+        df_c = df_ringer_7d if timepoint == "7 days" else df_ringer_1m if "Ringer's Solution" in solution_type else df_lac_7d if timepoint == "7 days" else df_lac_1m
+        elements = [c for c in df_c.columns if not c.endswith('_err') and c != 'Sample']
+        analysis = st.selectbox("Analysis Type", ["Correlation Matrix", "Box Plots", "Statistical Summary", "Normality Test"])
+        
+        if analysis == "Correlation Matrix":
+            sel = st.multiselect("Elements", elements, default=elements[:5] if elements else [])
+            if len(sel) >= 2:
+                corr = df_c[sel].corr()
+                fig, ax = plt.subplots(figsize=(11, 9))
+                sns.heatmap(corr, annot=True, cmap='RdBu_r', center=0, square=True, 
+                           linewidths=1.5, cbar_kws={"shrink": 0.85}, ax=ax, fmt='.2f',
+                           annot_kws={"size": font_size-1})
+                ax.set_title('Pearson Correlation Matrix', fontsize=font_size+2, fontweight='bold')
+                plt.tight_layout()
+                st.pyplot(fig)
+        
+        elif analysis == "Box Plots":
+            df_m = df_c.melt(id_vars=['Sample'], value_vars=elements[:6], var_name='Element', value_name='Concentration')
+            fig, ax = plt.subplots(figsize=(13, 7))
+            sns.boxplot(data=df_m, x='Element', y='Concentration', palette='pastel', ax=ax, showfliers=True, notch=True)
+            sns.stripplot(data=df_m, x='Element', y='Concentration', color='black', alpha=0.6, size=5, ax=ax)
+            ax.set_title('Concentration Distribution with Outliers', fontsize=font_size+2, fontweight='bold')
+            plt.tight_layout()
+            st.pyplot(fig)
+        
+        elif analysis == "Statistical Summary":
+            st.dataframe(df_c[elements].describe().round(4))
+            cv = df_c[elements].std() / df_c[elements].mean() * 100
+            st.subheader("Coefficient of Variation (%)")
+            st.dataframe(cv.round(2))
+        
+        elif analysis == "Normality Test":
+            if SCIPY_AVAILABLE:
+                for el in elements[:4]:
+                    try:
+                        stat, p = stats.shapiro(df_c[el].dropna())
+                        st.write(f"**{el}**: Shapiro-Wilk p={p:.4f} {'(Normal)' if p > 0.05 else '(Non-normal)'}")
+                    except:
+                        st.write(f"**{el}**: Insufficient data for normality test.")
+            else:
+                st.warning("scipy required for normality tests")
+
+# ============================================
+# TAB 3: MODERN VISUALIZATIONS
+# ============================================
+with tab3:
+    st.header("🎨 Modern Publication Visualizations")
+    
+    df_mod = df_ringer_7d if timepoint == "7 days" else df_ringer_1m if "Ringer's Solution" in solution_type else df_lac_7d if timepoint == "7 days" else df_lac_1m
+    elements_mod = [c for c in df_mod.columns if not c.endswith('_err') and c != 'Sample']
+    
+    viz_type = st.selectbox("Visualization Type", ["Stacked Bar", "Line Chart", "Element Stacking %", "Pairplot"])
+    
+    if viz_type == "Stacked Bar":
+        sel = st.multiselect("Elements to Stack", elements_mod, default=elements_mod[:4] if elements_mod else [])
+        if sel:
+            fig, ax = plt.subplots(figsize=(13, 7))
+            df_plot = df_mod.set_index('Sample')[sel]
+            safe_colors = get_safe_colors(color_palette, len(df_plot.columns))
+            df_plot.plot(kind='bar', stacked=True, ax=ax, color=safe_colors, edgecolor='black', linewidth=0.5)
+            ax.set_ylabel('Concentration (mg/L)', fontsize=font_size, fontweight='bold')
+            ax.set_title(f'Stacked Composition: {timepoint}', fontsize=font_size+2, fontweight='bold')
+            ax.tick_params(axis='x', rotation=45)
+            ax.legend(loc='upper left', bbox_to_anchor=(1, 1), fontsize=font_size-1)
+            ax.grid(axis='y', alpha=0.25)
+            plt.tight_layout()
+            st.pyplot(fig)
+    
+    elif viz_type == "Line Chart":
+        sel = st.multiselect("Elements", elements_mod, default=['Co', 'Cr'] if 'Co' in elements_mod and 'Cr' in elements_mod else elements_mod[:2] if len(elements_mod) >= 2 else elements_mod)
+        if sel:
+            fig, ax = plt.subplots(figsize=(13, 6))
+            safe_colors = get_safe_colors(color_palette, len(sel))
+            for idx, el in enumerate(sel):
+                ax.plot(df_mod['Sample'], df_mod[el], marker='o', label=el, 
+                        color=safe_colors[idx], linewidth=2.5, markersize=8, markeredgecolor='black')
+            ax.set_ylabel('Concentration (mg/L)', fontsize=font_size, fontweight='bold')
+            ax.set_title(f'Trend Analysis: {timepoint}', fontsize=font_size+2, fontweight='bold')
+            ax.tick_params(axis='x', rotation=45)
+            ax.legend(fontsize=font_size-1, frameon=True)
+            ax.grid(True, alpha=0.25)
+            plt.tight_layout()
+            st.pyplot(fig)
+    
+    elif viz_type == "Element Stacking %":
+        df_pct = df_mod[elements_mod].div(df_mod[elements_mod].sum(axis=1), axis=0) * 100
+        fig, ax = plt.subplots(figsize=(13, 7))
+        safe_colors = get_safe_colors("Set2", len(elements_mod))
+        df_pct.plot(kind='bar', stacked=True, ax=ax, color=safe_colors, edgecolor='black', linewidth=0.5)
+        ax.set_ylabel('Relative Composition (%)', fontsize=font_size, fontweight='bold')
+        ax.set_title(f'Normalized Element Distribution: {timepoint}', fontsize=font_size+2, fontweight='bold')
+        ax.tick_params(axis='x', rotation=45)
+        ax.legend(loc='upper left', bbox_to_anchor=(1, 1), fontsize=font_size-1)
+        plt.tight_layout()
+        st.pyplot(fig)
+    
+    elif viz_type == "Pairplot":
+        sel = st.multiselect("Elements (max 5)", elements_mod, default=elements_mod[:3] if len(elements_mod) >= 3 else elements_mod)
+        if len(sel) >= 2:
+            with st.spinner("Generating pairplot..."):
+                g = sns.pairplot(df_mod[sel], diag_kind='kde', corner=False, plot_kws={'alpha': 0.7, 'edgecolor': 'black'}, height=3.5)
+                g.fig.suptitle(f'Pairwise Relationships: {timepoint}', y=1.02, fontsize=font_size+2, fontweight='bold')
+                st.pyplot(g.fig)
+
+# ============================================
+# TAB 4: INTERACTIVE PLOTLY
+# ============================================
+with tab4:
+    st.header("📈 Interactive Plotly Visualizations")
+    
+    if not PLOTLY_AVAILABLE:
+        st.error("⚠️ Install Plotly: `pip install plotly`")
+    else:
+        df_pl = df_ringer_7d if timepoint == "7 days" else df_ringer_1m if "Ringer's Solution" in solution_type else df_lac_7d if timepoint == "7 days" else df_lac_1m
+        elements_pl = [c for c in df_pl.columns if not c.endswith('_err') and c != 'Sample']
+        
+        plotly_type = st.selectbox("Plotly Chart Type", ["3D Scatter", "Heatmap", "Sunburst", "Parallel Coordinates", "Bubble Chart", "Donut Comparison"])
+        
+        if plotly_type == "3D Scatter" and len(elements_pl) >= 3:
+            x3, y3, z3 = st.columns(3)
+            with x3: xe = st.selectbox("X", elements_pl, key="px_tab4")
+            with y3: ye = st.selectbox("Y", elements_pl, key="py_tab4")
+            with z3: ze = st.selectbox("Z", elements_pl, key="pz_tab4")
+            fig = plot_3d_scatter(df_pl, xe, ye, ze, font_size, font_family, publication_style)
+            st.plotly_chart(fig, use_container_width=True)
+        
+        elif plotly_type == "Heatmap":
+            sel = st.multiselect("Elements", elements_pl, default=elements_pl[:5] if elements_pl else [])
+            if len(sel) >= 2:
+                fig = plot_heatmap(df_pl, sel, font_size, font_family, publication_style)
+                st.plotly_chart(fig, use_container_width=True)
+        
+        elif plotly_type == "Sunburst":
+            fig = plot_sunburst(df_pl, elements_pl, font_size, font_family, publication_style)
+            st.plotly_chart(fig, use_container_width=True)
+        
+        elif plotly_type == "Parallel Coordinates":
+            fig = plot_parallel_coordinates(df_pl, elements_pl, font_size, font_family, publication_style)
+            st.plotly_chart(fig, use_container_width=True)
+        
+        elif plotly_type == "Bubble Chart":
+            bx, by, bs = st.columns(3)
+            with bx: bxe = st.selectbox("X", elements_pl, key="bx_tab4")
+            with by: bye = st.selectbox("Y", elements_pl, key="by_tab4")
+            with bs: bse = st.selectbox("Size", elements_pl, key="bs_tab4")
+            fig = plot_bubble_chart(df_pl, bxe, bye, bse, font_size, font_family, publication_style)
+            st.plotly_chart(fig, use_container_width=True)
+        
+        elif plotly_type == "Donut Comparison" and "Ringer's Solution" in solution_type and "Lactic Acid + NaCl" in solution_type:
+            el_donut = st.selectbox("Element", elements_pl)
+            df_r = df_ringer_7d if timepoint == "7 days" else df_ringer_1m
+            df_l = df_lac_7d if timepoint == "7 days" else df_lac_1m
+            fig = plot_donut_comparison(df_r, df_l, el_donut, font_size, font_family, publication_style)
+            st.plotly_chart(fig, use_container_width=True)
+
+# ============================================
+# TAB 5: SOLUTION COMPARISON
+# ============================================
+with tab5:
+    st.header("⚖️ Solution Comparison")
+    
+    if "Ringer's Solution" not in solution_type or "Lactic Acid + NaCl" not in solution_type:
+        st.warning("⚠️ Select both solutions in the sidebar for comparison.")
+    else:
+        df_r = df_ringer_7d if timepoint == "7 days" else df_ringer_1m
+        df_l = df_lac_7d if timepoint == "7 days" else df_lac_1m
+        common = sorted(list(set(df_r.columns) & set(df_l.columns) - {'Sample'} - {c for c in df_r.columns if c.endswith('_err')}))
+        
+        comp_type = st.selectbox("Comparison Type", ["Side-by-Side Bars", "🔄 Multi-Element Combined View", "Fold Change", "Statistical Summary"])
+        
+        if comp_type == "Side-by-Side Bars":
+            el_comp = st.selectbox("Element to Compare", common)
+            fig = plot_solution_comparison(df_r, df_l, el_comp, font_size, publication_style)
+            st.pyplot(fig)
+            if st.button(f"📥 Download Comparison", key="dl_comp_single"):
+                st.markdown(download_figure_matplotlib(fig, f"comp_{el_comp}"), unsafe_allow_html=True)
+        
+        elif comp_type == "🔄 Multi-Element Combined View":
+            st.info("💡 Displays all selected elements for both solutions in one unified chart with color-coded edges")
+            sel_elements = st.multiselect("Elements to Display", common, default=common[:4] if common else [])
+            if sel_elements:
+                fig = plot_combined_solutions_bars(df_r, df_l, sel_elements,
+                                                   f"Multi-Element Comparison: {timepoint}",
+                                                   "Concentration (mg/L)",
+                                                   font_size, color_palette, group_by_prefix)
+                st.pyplot(fig)
+                if st.button("📥 Download Multi-Element Comparison", key="dl_multi_combined"):
+                    st.markdown(download_figure_matplotlib(fig, f"multi_combined_{timepoint.replace(' ', '_')}"), unsafe_allow_html=True)
+        
+        elif comp_type == "Fold Change":
+            st.info("Fold Change = (Lactic Acid Mean) / (Ringer's Mean)")
+            fc_data = {el: df_l[el].mean() / df_r[el].mean() for el in common}
+            fc_df = pd.DataFrame(list(fc_data.items()), columns=['Element', 'Fold Change'])
+            
+            fig, ax = plt.subplots(figsize=(11, 6))
+            bars = ax.bar(fc_df['Element'], fc_df['Fold Change'], 
+                          color=fc_df['Fold Change'].apply(lambda x: '#FF006E' if x > 1 else '#3A86FF'),
+                          edgecolor='black', linewidth=1, alpha=0.9)
+            ax.axhline(y=1, color='black', linestyle='--', linewidth=1.5, label='No Change')
+            ax.set_ylabel('Fold Change (LAC / Ringer)', fontsize=font_size, fontweight='bold')
+            ax.set_title(f'Element Release Fold Change: {timepoint}', fontsize=font_size+2, fontweight='bold')
+            ax.legend(fontsize=font_size-1, frameon=True)
+            ax.grid(axis='y', alpha=0.25)
+            for bar, val in zip(bars, fc_df['Fold Change']):
+                ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.05, 
+                        f'{val:.2f}x', ha='center', va='bottom', fontsize=font_size-1, fontweight='bold')
+            plt.tight_layout()
+            st.pyplot(fig)
+        
+        elif comp_type == "Statistical Summary":
+            st.subheader("Ringer's Solution")
+            st.dataframe(df_r[common].describe().round(4))
+            st.subheader("Lactic Acid + NaCl")
+            st.dataframe(df_l[common].describe().round(4))
+            
+            comp_table = pd.DataFrame({
+                'Element': common,
+                'Ringer Mean': df_r[common].mean().round(4),
+                'LAC Mean': df_l[common].mean().round(4),
+                'Difference': (df_l[common].mean() - df_r[common].mean()).round(4),
+                'Fold Change': (df_l[common].mean() / df_r[common].mean()).round(3)
+            })
+            st.dataframe(comp_table)
+
+st.markdown("---")
+st.caption("📊 ICP-AES Visualization Suite v2.4 | Supports: streamlit, pandas, numpy, matplotlib, seaborn, plotly, kaleido, scipy | ✨ New: Combined Solution View")
