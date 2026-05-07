@@ -15,7 +15,8 @@ st.title("🔬 ICP-AES Ion Release Analysis - Publication Quality Dashboard")
 
 # ── Data (μg·cm⁻², converted from ppm × 10 mL / 10.2 cm²) ──────────────────
 samples = ['CH0', 'CH45', 'PH0', 'PH45', 'CNH0', 'CNH45', 'PNH0', 'PNH45']
-sample_labels = ['CH₀', 'CH₄₅', 'PH₀', 'PH₄₅', 'CNH₀', 'CNH₄₅', 'PNH₀', 'PNH₄₅']
+# Use regular-sized numbers (not Unicode subscripts) for proper display
+sample_labels = ['CH0', 'CH45', 'PH0', 'PH45', 'CNH0', 'CNH45', 'PNH0', 'PNH45']
 
 data = {
     'Co': {
