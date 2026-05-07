@@ -15,7 +15,6 @@ st.title("🔬 ICP-AES Ion Release Analysis - Publication Quality Dashboard")
 
 # ── Data (μg·cm⁻², converted from ppm × 10 mL / 10.2 cm²) ──────────────────
 samples = ['CH0', 'CH45', 'PH0', 'PH45', 'CNH0', 'CNH45', 'PNH0', 'PNH45']
-# Use regular-sized numbers (not Unicode subscripts) for proper display
 sample_labels = ['CH0', 'CH45', 'PH0', 'PH45', 'CNH0', 'CNH45', 'PNH0', 'PNH45']
 
 data = {
@@ -137,11 +136,12 @@ with st.sidebar:
     show_data_labels = st.checkbox("Show Data Labels", value=False)
     label_precision = st.slider("Label Decimal Places", 1, 4, 3, 1)
     
-    st.subheader("📏 Axis Configuration")
+    st.subheader("📏 Axis Configuration - UNIFIED SCALE")
     y_log_scale = st.checkbox("Log Scale Y-Axis", value=False)
-    auto_ylim = st.checkbox("Auto Y-Limits", value=True)
-    y_min = st.number_input("Y-Axis Min", value=0.0, step=0.01, format="%.3f", disabled=auto_ylim)
-    y_max = st.number_input("Y-Axis Max", value=2.5, step=0.01, format="%.3f", disabled=auto_ylim)
+    # Unified Y-axis limits for ALL charts - ensures consistent comparison
+    unified_y_min = st.number_input("🔗 Unified Y-Axis Min (all charts)", value=0.0, step=0.01, format="%.3f")
+    unified_y_max = st.number_input("🔗 Unified Y-Axis Max (all charts)", value=2.5, step=0.01, format="%.3f")
+    lock_y_scale = st.checkbox("🔒 Lock Y-Scale Across All Charts", value=True, help="When enabled, all charts use the same Y-axis range for direct comparison")
     
     st.subheader("✨ Advanced Styling")
     bar_hatch = st.selectbox("Bar Hatch Pattern", ["none", "/", "\\", "|", "-", "+", "x", "o", "O", ".", "*"], index=0)
@@ -223,6 +223,9 @@ def render_chart(ax, element, cond_data, chart_type, use_3d=False, is_combined=F
         ax.set_zlabel('Ion release (μg·cm⁻²)', fontsize=font_size_base+1)
         ax.set_title(f'{element} ion release', fontsize=font_size_base+2, fontweight='bold' if title_bold else 'normal')
         ax.view_init(elev=elev, azim=azim)
+        # Apply unified Z-axis (equivalent to Y in 3D) scale
+        if lock_y_scale and not y_log_scale:
+            ax.set_zlim(unified_y_min, unified_y_max)
         return
     
     # ── 2D Chart Rendering ──────────────────────────────────────────────
@@ -329,11 +332,19 @@ def render_chart(ax, element, cond_data, chart_type, use_3d=False, is_combined=F
     ax.set_ylabel('Ion release (μg·cm⁻²)', fontsize=font_size_base+1, fontstyle='italic' if label_italic else 'normal')
     ax.set_title(f'{element} ion release', fontsize=font_size_base+2, fontweight='bold' if title_bold else 'normal', pad=12)
     
-    if not auto_ylim:
-        ax.set_ylim(y_min, y_max)
-    if y_log_scale and chart_type not in ["Box Plot"]:
-        ax.set_yscale('log')
-        ax.yaxis.set_major_locator(MaxNLocator(nbins=6))
+    # ── UNIFIED Y-AXIS SCALE FOR ALL CHARTS ─────────────────────────────
+    if lock_y_scale:
+        if y_log_scale and chart_type not in ["Box Plot"]:
+            ax.set_yscale('log')
+            ax.set_ylim(max(0.001, unified_y_min), unified_y_max)
+            ax.yaxis.set_major_locator(MaxNLocator(nbins=6))
+        else:
+            ax.set_ylim(unified_y_min, unified_y_max)
+    else:
+        # Fallback to auto-scaling if lock is disabled
+        if y_log_scale and chart_type not in ["Box Plot"]:
+            ax.set_yscale('log')
+            ax.yaxis.set_major_locator(MaxNLocator(nbins=6))
     
     # ── Grid Configuration ───────────────────────────────────────────────
     if show_grid and frame_style != "No Frame":
@@ -418,5 +429,5 @@ with col2:
 with col3:
     st.metric("Conditions", len(conditions))
 
-st.caption(f"🎨 Style: {pub_style} | 📊 Type: {chart_type} | 🧊 3D: {'Yes' if use_3d else 'No'} | 📐 DPI: {export_dpi}")
-st.success("✅ Charts rendered successfully. Use your browser's print function or right-click charts to save.")
+st.caption(f"🎨 Style: {pub_style} | 📊 Type: {chart_type} | 🧊 3D: {'Yes' if use_3d else 'No'} | 📐 DPI: {export_dpi} | 🔒 Unified Y-Scale: {'ON' if lock_y_scale else 'OFF'}")
+st.success("✅ Charts rendered with unified Y-axis scale for direct comparison. Use browser print or right-click to save.")
