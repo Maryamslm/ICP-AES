@@ -9,7 +9,7 @@ warnings.filterwarnings('ignore', category=UserWarning, module='matplotlib')
 
 # Streamlit page configuration
 st.set_page_config(page_title="Ion Release Analysis", layout="wide")
-st.title("ICP-AES Ion Release Analysis Dashboard")
+st.title("ICP-AES Ion Release Analysis")
 
 # ── Data (μg·cm⁻², converted from ppm × 10 mL / 10.2 cm²) ──────────────────
 samples = ['CH0', 'CH45', 'PH0', 'PH45', 'CNH0', 'CNH45', 'PNH0', 'PNH45']
@@ -74,49 +74,24 @@ data = {
     },
 }
 
-# ── Sidebar Controls ────────────────────────────────────────────────────────
-with st.sidebar:
-    st.header("🛠️ Chart Settings")
+# ── Style ────────────────────────────────────────────────────────────────────
+colors = {
+    'Ringer 7D': '#85B7EB',
+    'Ringer 1M': '#185FA5',
+    'LAC 7D':    '#F0997B',
+    'LAC 1M':    '#D85A30',
+}
 
-    font_size = st.slider("🔤 Font Size", min_value=8, max_value=16, value=11, step=1)
+conditions = list(colors.keys())
+n = len(samples)
+n_cond = len(conditions)
+bar_w = 0.18
+offsets = np.arange(n_cond) * bar_w - (n_cond - 1) * bar_w / 2
 
-    st.subheader("🎨 Condition Colors")
-    default_colors = {
-        'Ringer 7D': '#85B7EB',
-        'Ringer 1M': '#185FA5',
-        'LAC 7D':    '#F0997B',
-        'LAC 1M':    '#D85A30',
-    }
-    user_colors = {}
-    for cond, default in default_colors.items():
-        user_colors[cond] = st.color_picker(cond, default)
-
-    view_mode = st.radio("📊 View Mode", ["Individual", "Combined (2x3 Grid)"])
-
-    st.subheader("🖼️ Background")
-    fig_bg_choice = st.radio("Figure Background", ["White", "Transparent", "Custom"])
-    if fig_bg_choice == "Custom":
-        fig_bg = st.color_picker("Custom Figure Color", "#F5F5F5")
-    elif fig_bg_choice == "White":
-        fig_bg = "#FFFFFF"
-    else:
-        fig_bg = None
-
-    axes_bg = st.color_picker("Axes Plot Background", "#FFFFFF")
-
-    st.subheader("📜 Legend")
-    show_legend = st.checkbox("Show Legend", value=True)
-    legend_pos = st.selectbox(
-        "Legend Position",
-        ["upper left", "upper right", "lower left", "lower right", "center right", "best"],
-        disabled=not show_legend
-    )
-
-# ── Apply Matplotlib Params ─────────────────────────────────────────────────
 plt.rcParams.update({
     'font.family':    'sans-serif',
     'font.sans-serif': ['Arial', 'DejaVu Sans', 'Helvetica', 'Liberation Sans'],
-    'font.size':      font_size,
+    'font.size':      11,
     'axes.linewidth': 0.8,
     'xtick.major.width': 0.8,
     'ytick.major.width': 0.8,
@@ -124,79 +99,72 @@ plt.rcParams.update({
     'axes.spines.right': False,
 })
 
-conditions = list(user_colors.keys())
-n = len(samples)
-n_cond = len(conditions)
-bar_w = 0.18
-offsets = np.arange(n_cond) * bar_w - (n_cond - 1) * bar_w / 2
+# ── Streamlit Layout & Plot Generation ───────────────────────────────────────
+for element, cond_data in data.items():
+    st.subheader(f"{element} Ion Release")
 
-# ── Plot Generation Helper ──────────────────────────────────────────────────
-def render_element_on_axis(ax, element, cond_data, is_combined=False):
+    fig, ax = plt.subplots(figsize=(10, 5))
     x = np.arange(n)
+
     for i, cond in enumerate(conditions):
         vals_errs = cond_data[cond]
         if vals_errs is None:
-            continue
+            continue  # not detected — skip this condition
 
         vals, errs = vals_errs
+
+        # Convert to float arrays, replacing None with np.nan for safe plotting
         plot_vals = np.array([v if v is not None else np.nan for v in vals], dtype=float)
         plot_errs = np.array([e if e is not None else np.nan for e in errs], dtype=float)
+
+        # Mask to only plot valid (non-nan) data points
         valid_mask = ~np.isnan(plot_vals)
         x_valid = x[valid_mask] + offsets[i]
 
-        ax.bar(x_valid, plot_vals[valid_mask], width=bar_w,
-               color=user_colors[cond], label=cond, zorder=3,
-               edgecolor='white', linewidth=0.4)
-        ax.errorbar(x_valid, plot_vals[valid_mask], yerr=plot_errs[valid_mask],
-                    fmt='none', ecolor='#444', elinewidth=0.8, capsize=3,
-                    capthick=0.8, zorder=4)
+        ax.bar(
+            x_valid,
+            plot_vals[valid_mask],
+            width=bar_w,
+            color=colors[cond],
+            label=cond,
+            zorder=3,
+            edgecolor='white',
+            linewidth=0.4,
+        )
+        ax.errorbar(
+            x_valid,
+            plot_vals[valid_mask],
+            yerr=plot_errs[valid_mask],
+            fmt='none',
+            ecolor='#444',
+            elinewidth=0.8,
+            capsize=3,
+            capthick=0.8,
+            zorder=4,
+        )
 
     ax.set_xticks(x)
-    ax.set_xticklabels(samples, fontsize=font_size)
-    ax.set_ylabel('Ion release (μg·cm⁻²)', fontsize=font_size+1)
-    ax.set_title(f'{element} ion release', fontsize=font_size+2, fontweight='normal', pad=8)
+    ax.set_xticklabels(samples, fontsize=11)
+    ax.set_ylabel('Ion release (μg·cm⁻²)', fontsize=12)
     ax.yaxis.grid(True, linestyle='--', linewidth=0.5, alpha=0.6, zorder=0)
     ax.set_axisbelow(True)
-    ax.set_facecolor(axes_bg)
 
+    # legend (only conditions that have data for this element)
     detected = [c for c in conditions if cond_data[c] is not None]
-    if show_legend and detected:
-        handles = [mpatches.Patch(color=user_colors[c], label=c) for c in detected]
-        ncol = 1 if is_combined else 2
-        ax.legend(handles=handles, frameon=False, fontsize=font_size-1,
-                  loc=legend_pos, ncol=ncol)
+    if detected:
+        handles = [mpatches.Patch(color=colors[c], label=c) for c in detected]
+        ax.legend(handles=handles, frameon=False, fontsize=10,
+                  loc='upper left', ncol=2)
 
+    # note for partial detection
     if element in ('Al', 'Si'):
-        ax.text(0.99, 0.97, '* n.d. = not detected in that condition',
-                transform=ax.transAxes, fontsize=font_size-2,
+        ax.text(0.99, 0.97,
+                '* n.d. = not detected in that condition',
+                transform=ax.transAxes, fontsize=9,
                 ha='right', va='top', color='gray')
 
-# ── Streamlit Rendering ─────────────────────────────────────────────────────
-if view_mode == "Individual":
-    for element, cond_data in data.items():
-        st.subheader(f"{element} Ion Release")
-        fig, ax = plt.subplots(figsize=(10, 5))
-        if fig_bg:
-            fig.patch.set_facecolor(fig_bg)
-        render_element_on_axis(ax, element, cond_data, is_combined=False)
-        plt.tight_layout()
-        st.pyplot(fig, use_container_width=True)
-        plt.close(fig)
-else:
-    # Combined 2x3 grid
-    st.subheader("Combined Element Overview")
-    fig, axes = plt.subplots(2, 3, figsize=(16, 10))
-    if fig_bg:
-        fig.patch.set_facecolor(fig_bg)
-    axes_flat = axes.flatten()
-    elements = list(data.keys())
-    for idx, (element, cond_data) in enumerate(data.items()):
-        render_element_on_axis(axes_flat[idx], element, cond_data, is_combined=True)
-    # Hide any leftover axes if dataset changes size
-    for ax in axes_flat[len(elements):]:
-        ax.axis('off')
     plt.tight_layout()
     st.pyplot(fig, use_container_width=True)
-    plt.close(fig)
+    plt.close(fig)  # Crucial for Streamlit to prevent memory leaks
 
-st.success("✅ Charts rendered successfully with current settings.")
+st.success("✅ All charts rendered successfully.")
