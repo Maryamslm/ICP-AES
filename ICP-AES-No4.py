@@ -1,10 +1,15 @@
+import streamlit as st
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
 import warnings
 
-# Suppress non-critical matplotlib deprecation warnings for cleaner output
+# Suppress non-critical matplotlib deprecation warnings
 warnings.filterwarnings('ignore', category=UserWarning, module='matplotlib')
+
+# Streamlit page configuration
+st.set_page_config(page_title="Ion Release Analysis", layout="wide")
+st.title("ICP-AES Ion Release Analysis")
 
 # ── Data (μg·cm⁻², converted from ppm × 10 mL / 10.2 cm²) ──────────────────
 samples = ['CH0', 'CH45', 'PH0', 'PH45', 'CNH0', 'CNH45', 'PNH0', 'PNH45']
@@ -94,8 +99,10 @@ plt.rcParams.update({
     'axes.spines.right': False,
 })
 
-# ── One figure per element ───────────────────────────────────────────────────
+# ── Streamlit Layout & Plot Generation ───────────────────────────────────────
 for element, cond_data in data.items():
+    st.subheader(f"{element} Ion Release")
+
     fig, ax = plt.subplots(figsize=(10, 5))
     x = np.arange(n)
 
@@ -139,8 +146,6 @@ for element, cond_data in data.items():
     ax.set_xticks(x)
     ax.set_xticklabels(samples, fontsize=11)
     ax.set_ylabel('Ion release (μg·cm⁻²)', fontsize=12)
-    ax.set_title(f'{element} ion release — Ringer\'s solution vs Lactic Acid+NaCl',
-                 fontsize=13, fontweight='normal', pad=12)
     ax.yaxis.grid(True, linestyle='--', linewidth=0.5, alpha=0.6, zorder=0)
     ax.set_axisbelow(True)
 
@@ -159,9 +164,7 @@ for element, cond_data in data.items():
                 ha='right', va='top', color='gray')
 
     plt.tight_layout()
-    fname = f'ICP_AES_{element}_bar_chart.png'
-    plt.savefig(fname, dpi=300, bbox_inches='tight')
-    print(f'Saved: {fname}')
-    plt.close()
+    st.pyplot(fig, use_container_width=True)
+    plt.close(fig)  # Crucial for Streamlit to prevent memory leaks
 
-print('\nAll charts saved at 300 dpi.')
+st.success("✅ All charts rendered successfully.")
