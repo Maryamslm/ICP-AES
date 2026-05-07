@@ -1,9 +1,12 @@
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
+import warnings
+
+# Suppress non-critical matplotlib deprecation warnings for cleaner output
+warnings.filterwarnings('ignore', category=UserWarning, module='matplotlib')
 
 # ── Data (μg·cm⁻², converted from ppm × 10 mL / 10.2 cm²) ──────────────────
-
 samples = ['CH0', 'CH45', 'PH0', 'PH45', 'CNH0', 'CNH45', 'PNH0', 'PNH45']
 
 data = {
@@ -67,7 +70,6 @@ data = {
 }
 
 # ── Style ────────────────────────────────────────────────────────────────────
-
 colors = {
     'Ringer 7D': '#85B7EB',
     'Ringer 1M': '#185FA5',
@@ -82,7 +84,8 @@ bar_w = 0.18
 offsets = np.arange(n_cond) * bar_w - (n_cond - 1) * bar_w / 2
 
 plt.rcParams.update({
-    'font.family':    'Arial',
+    'font.family':    'sans-serif',
+    'font.sans-serif': ['Arial', 'DejaVu Sans', 'Helvetica', 'Liberation Sans'],
     'font.size':      11,
     'axes.linewidth': 0.8,
     'xtick.major.width': 0.8,
@@ -92,7 +95,6 @@ plt.rcParams.update({
 })
 
 # ── One figure per element ───────────────────────────────────────────────────
-
 for element, cond_data in data.items():
     fig, ax = plt.subplots(figsize=(10, 5))
     x = np.arange(n)
@@ -104,13 +106,17 @@ for element, cond_data in data.items():
 
         vals, errs = vals_errs
 
-        # replace None entries (partial detection) with 0
-        plot_vals = [v if v is not None else 0 for v in vals]
-        plot_errs = [e if e is not None else 0 for e in errs]
+        # Convert to float arrays, replacing None with np.nan for safe plotting
+        plot_vals = np.array([v if v is not None else np.nan for v in vals], dtype=float)
+        plot_errs = np.array([e if e is not None else np.nan for e in errs], dtype=float)
+
+        # Mask to only plot valid (non-nan) data points
+        valid_mask = ~np.isnan(plot_vals)
+        x_valid = x[valid_mask] + offsets[i]
 
         ax.bar(
-            x + offsets[i],
-            plot_vals,
+            x_valid,
+            plot_vals[valid_mask],
             width=bar_w,
             color=colors[cond],
             label=cond,
@@ -119,9 +125,9 @@ for element, cond_data in data.items():
             linewidth=0.4,
         )
         ax.errorbar(
-            x + offsets[i],
-            plot_vals,
-            yerr=plot_errs,
+            x_valid,
+            plot_vals[valid_mask],
+            yerr=plot_errs[valid_mask],
             fmt='none',
             ecolor='#444',
             elinewidth=0.8,
@@ -140,9 +146,10 @@ for element, cond_data in data.items():
 
     # legend (only conditions that have data for this element)
     detected = [c for c in conditions if cond_data[c] is not None]
-    handles = [mpatches.Patch(color=colors[c], label=c) for c in detected]
-    ax.legend(handles=handles, frameon=False, fontsize=10,
-              loc='upper left', ncol=2)
+    if detected:
+        handles = [mpatches.Patch(color=colors[c], label=c) for c in detected]
+        ax.legend(handles=handles, frameon=False, fontsize=10,
+                  loc='upper left', ncol=2)
 
     # note for partial detection
     if element in ('Al', 'Si'):
