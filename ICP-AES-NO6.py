@@ -102,6 +102,12 @@ with st.sidebar:
     title_bold = st.checkbox("Bold Titles", value=True)
     label_italic = st.checkbox("Italic Axis Labels", value=False)
     
+    st.subheader("📏 Axis Font Sizes")
+    x_tick_font_size = st.slider("X-Axis Tick Labels", 6, 36, font_size_base, 1)
+    y_tick_font_size = st.slider("Y-Axis Tick Labels", 6, 36, font_size_base, 1)
+    x_label_font_size = st.slider("X-Axis Label", 6, 36, font_size_base + 1, 1)
+    y_label_font_size = st.slider("Y-Axis Label", 6, 36, font_size_base + 1, 1)
+    
     st.subheader("🎨 Color Scheme")
     color_palette = st.selectbox("Color Palette", list(COLORBLIND_PALETTES.keys()))
     custom_colors = {}
@@ -134,16 +140,19 @@ with st.sidebar:
     legend_pos = "upper right"
     legend_frame = False
     legend_cols = 2
+    legend_font_size = font_size_base - 1
     if show_legend:
         legend_pos = st.selectbox("Position", ["upper right", "upper left", "lower left", "lower right", "center right", "best"], index=0)
         legend_frame = st.checkbox("Legend Frame", value=False)
         legend_cols = st.slider("Legend Columns", 1, 4, 2)
+        legend_font_size = st.slider("Legend Font Size", 6, 36, font_size_base - 1, 1)
     
     st.subheader("📈 Data Display")
     show_error_bars = st.checkbox("Show Error Bars", value=True)
     error_cap_size = st.slider("Error Bar Cap Size", 2, 8, 4, 1)
     show_data_labels = st.checkbox("Show Data Labels", value=False)
     label_precision = st.slider("Label Decimal Places", 1, 4, 3, 1)
+    data_label_font_size = st.slider("Data Label Font Size", 6, 36, font_size_base - 2, 1)
     
     st.subheader("📏 Axis Configuration")
     y_log_scale = st.checkbox("Log Scale Y-Axis", value=False)
@@ -235,10 +244,10 @@ def render_chart(ax, element, cond_data, chart_type, use_3d=False, is_combined=F
             ax.bar3d(xs, ys, zs, dx, dy, dz, color=custom_colors[cond], 
                      alpha=bar_alpha, edgecolor='white', linewidth=bar_edge_width)
         ax.set_xticks(x_positions)
-        ax.set_xticklabels(sample_labels, fontsize=font_size_base)
+        ax.set_xticklabels(sample_labels, fontsize=x_tick_font_size)
         ax.set_yticks(np.arange(n_cond))
-        ax.set_yticklabels(detected_conditions, fontsize=font_size_base-1)
-        ax.set_zlabel('Ion release (μg·cm⁻²)', fontsize=font_size_base+1)
+        ax.set_yticklabels(detected_conditions, fontsize=y_tick_font_size)
+        ax.set_zlabel('Ion release (μg·cm⁻²)', fontsize=z_label_font_size if 'z_label_font_size' in locals() else y_label_font_size)
         ax.set_title(f'{element} ion release', fontsize=font_size_base+2, fontweight='bold' if title_bold else 'normal')
         ax.view_init(elev=elev, azim=azim)
         return
@@ -264,7 +273,7 @@ def render_chart(ax, element, cond_data, chart_type, use_3d=False, is_combined=F
                 for x_pos, val in zip(x_valid, vals[valid_mask]):
                     if not np.isnan(val) and val > 0:
                         ax.text(x_pos, val + 0.02, f'{val:.{label_precision}f}',
-                               ha='center', va='bottom', fontsize=font_size_base-2, rotation=90)
+                               ha='center', va='bottom', fontsize=data_label_font_size, rotation=90)
     
     elif chart_type == "Stacked Bar":
         bottom = np.zeros(len(samples))
@@ -328,7 +337,7 @@ def render_chart(ax, element, cond_data, chart_type, use_3d=False, is_combined=F
             for patch, cond in zip(bp['boxes'], box_labels):
                 patch.set_facecolor(custom_colors[cond])
                 patch.set_alpha(bar_alpha)
-            ax.set_xticklabels(box_labels, rotation=45, ha='right', fontsize=font_size_base-1)
+            ax.set_xticklabels(box_labels, rotation=45, ha='right', fontsize=x_tick_font_size)
     
     elif chart_type == "Error Band":
         for i, cond in enumerate(detected_conditions):
@@ -343,9 +352,13 @@ def render_chart(ax, element, cond_data, chart_type, use_3d=False, is_combined=F
 
     # ── Axis Configuration ───────────────────────────────────────────────
     ax.set_xticks(x_positions)
-    ax.set_xticklabels(sample_labels, fontsize=font_size_base)
-    ax.set_ylabel('Ion release (μg·cm⁻²)', fontsize=font_size_base+1, fontstyle='italic' if label_italic else 'normal')
+    ax.set_xticklabels(sample_labels, fontsize=x_tick_font_size)
+    ax.set_xlabel('Samples', fontsize=x_label_font_size)
+    ax.set_ylabel('Ion release (μg·cm⁻²)', fontsize=y_label_font_size, fontstyle='italic' if label_italic else 'normal')
     ax.set_title(f'{element} ion release', fontsize=font_size_base+2, fontweight='bold' if title_bold else 'normal', pad=12)
+    
+    # Set y-tick font size
+    ax.tick_params(axis='y', labelsize=y_tick_font_size)
     
     if not auto_ylim:
         ax.set_ylim(y_min, y_max)
@@ -377,7 +390,7 @@ def render_chart(ax, element, cond_data, chart_type, use_3d=False, is_combined=F
     # ── Legend Configuration ─────────────────────────────────────────────
     if show_legend and detected_conditions:
         handles = [mpatches.Patch(color=custom_colors[c], label=c) for c in detected_conditions]
-        ax.legend(handles=handles, frameon=legend_frame, fontsize=font_size_base-1,
+        ax.legend(handles=handles, frameon=legend_frame, fontsize=legend_font_size,
                  loc=legend_pos, ncol=legend_cols, handlelength=1.5, handleheight=1)
     
     # ── Annotation for Partial Detection ─────────────────────────────────
