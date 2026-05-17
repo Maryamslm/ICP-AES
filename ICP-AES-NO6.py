@@ -1,10 +1,9 @@
 import streamlit as st
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
-import matplotlib.colors as mcolors
 import numpy as np
 import warnings
-from matplotlib.ticker import MaxNLocator, ScalarFormatter, AutoMinorLocator
+from matplotlib.ticker import MaxNLocator
 
 # Suppress non-critical matplotlib deprecation warnings
 warnings.filterwarnings('ignore', category=UserWarning, module='matplotlib')
@@ -16,6 +15,7 @@ st.title("🔬 ICP-AES Ion Release Analysis - Publication Quality Dashboard")
 
 # ── Data (μg·cm⁻², converted from ppm × 10 mL / 10.2 cm²) ──────────────────
 samples = ['CH0', 'CH45', 'PH0', 'PH45', 'CNH0', 'CNH45', 'PNH0', 'PNH45']
+# Use regular-sized numbers (not Unicode subscripts) for proper display
 sample_labels = ['CH0', 'CH45', 'PH0', 'PH45', 'CNH0', 'CNH45', 'PNH0', 'PNH45']
 
 data = {
@@ -57,38 +57,31 @@ data = {
     },
 }
 
-# ── Publication Style Presets (Origin Pro Inspired) ─────────────────────────
+# ── Publication Style Presets ───────────────────────────────────────────────
 PUBLICATION_STYLES = {
-    "Origin Pro Default": {'font_family': 'sans-serif', 'font_size_base': 12, 'line_width': 1.0, 'marker_size': 5, 'dpi': 300, 'facecolor': '#FFFFFF', 'edgecolor': '#000000', 'tick_direction': 'in', 'tick_length': 4},
-    "Nature":  {'font_family': 'sans-serif', 'font_size_base': 9,  'line_width': 0.75,'marker_size': 3, 'dpi': 600, 'facecolor': '#FFFFFF', 'edgecolor': '#000000', 'tick_direction': 'in', 'tick_length': 3},
-    "Science": {'font_family': 'serif',      'font_size_base': 10, 'line_width': 0.8, 'marker_size': 4, 'dpi': 600, 'facecolor': '#FFFFFF', 'edgecolor': '#000000', 'tick_direction': 'in', 'tick_length': 4},
-    "IEEE":    {'font_family': 'sans-serif', 'font_size_base': 10, 'line_width': 1.0, 'marker_size': 5, 'dpi': 300, 'facecolor': '#FFFFFF', 'edgecolor': '#000000', 'tick_direction': 'out', 'tick_length': 4},
-    "APA":     {'font_family': 'serif',      'font_size_base': 12, 'line_width': 0.8, 'marker_size': 4, 'dpi': 300, 'facecolor': '#FFFFFF', 'edgecolor': '#000000', 'tick_direction': 'in', 'tick_length': 4},
-    "ACS":     {'font_family': 'serif',      'font_size_base': 10, 'line_width': 0.9, 'marker_size': 4, 'dpi': 600, 'facecolor': '#FFFFFF', 'edgecolor': '#000000', 'tick_direction': 'in', 'tick_length': 3.5},
-    "RSC":     {'font_family': 'sans-serif', 'font_size_base': 9,  'line_width': 0.8, 'marker_size': 3, 'dpi': 600, 'facecolor': '#FFFFFF', 'edgecolor': '#000000', 'tick_direction': 'in', 'tick_length': 3},
-    "Dark Mode":{'font_family': 'sans-serif', 'font_size_base': 11, 'line_width': 0.8, 'marker_size': 4, 'dpi': 300, 'facecolor': '#1E1E1E', 'edgecolor': '#FFFFFF', 'tick_direction': 'in', 'tick_length': 4}
+    "Default": {'font_family': 'sans-serif', 'font_size_base': 11, 'line_width': 0.8, 'marker_size': 4, 'dpi': 300, 'facecolor': '#FFFFFF', 'edgecolor': '#000000'},
+    "Nature":  {'font_family': 'sans-serif', 'font_size_base': 9,  'line_width': 0.75,'marker_size': 3, 'dpi': 600, 'facecolor': '#FFFFFF', 'edgecolor': '#000000'},
+    "Science": {'font_family': 'serif',      'font_size_base': 10, 'line_width': 0.8, 'marker_size': 4, 'dpi': 600, 'facecolor': '#FFFFFF', 'edgecolor': '#000000'},
+    "IEEE":    {'font_family': 'sans-serif', 'font_size_base': 10, 'line_width': 1.0, 'marker_size': 5, 'dpi': 300, 'facecolor': '#FFFFFF', 'edgecolor': '#000000'},
+    "APA":     {'font_family': 'serif',      'font_size_base': 12, 'line_width': 0.8, 'marker_size': 4, 'dpi': 300, 'facecolor': '#FFFFFF', 'edgecolor': '#000000'},
+    "Dark Mode":{'font_family': 'sans-serif', 'font_size_base': 11, 'line_width': 0.8, 'marker_size': 4, 'dpi': 300, 'facecolor': '#1E1E1E', 'edgecolor': '#FFFFFF'}
 }
 
-# Extended Colorblind-Friendly & Publication Palettes
 COLORBLIND_PALETTES = {
-    "Origin Default": ['#0072BD', '#D95319', '#EDB120', '#77AC30', '#4DBEEE', '#A2142F'],
-    "Colorblind-Friendly": ['#0072B2', '#009E73', '#D55E00', '#CC79A7', '#56B4E9', '#F0E442'],
-    "High-Contrast": ['#000000', '#E69F00', '#56B4E9', '#009E73', '#CC79A7', '#0072B2'],
-    "Monochrome": ['#333333', '#666666', '#999999', '#BBBBBB', '#DDDDDD', '#EEEEEE'],
-    "Vibrant": ['#E63946', '#F4A261', '#2A9D8F', '#264653', '#E9C46A', '#2A9D8F'],
-    "Viridis": ['#440154', '#31688E', '#35B779', '#FDE725'],
-    "Plasma": ['#0D0887', '#6A00A8', '#B12A90', '#F0703A', '#FCF44A'],
-    "Inferno": ['#000004', '#420A68', '#9A2B6B', '#DD4F43', '#FCFFA4'],
-    "Magma": ['#000004', '#3B0F70', '#8C2981', '#DD4F43', '#FCFFA4'],
-    "Cividis": ['#00224E', '#3E598C', '#7F8FAE', '#C1C5D0', '#FDE725'],
-    "Turbo": ['#300040', '#0040FF', '#00FFFF', '#80FF00', '#FFFF00', '#FF8000', '#FF0000'],
-    "Tableau 10": ['#4E79A7', '#F28E2B', '#E15759', '#76B7B2', '#59A14F', '#EDC948', '#AF7AA1', '#FF9DA7', '#9C755F', '#BAB0AC'],
-    "Pastel": ['#A6CEE3', '#1F78B4', '#B2DF8A', '#33A02C', '#FB9A99', '#E31A1C', '#FDBF6F', '#FF7F00'],
-    "Set2": ['#66C2A5', '#FC8D62', '#8DA0CB', '#E78AC3', '#A6D854', '#FFD92F', '#E5C494', '#B3B3B3']
+    "Standard": ['#85B7EB', '#185FA5', '#F0997B', '#D85A30', '#2ECC71', '#9B59B6', '#F1C40F', '#1ABC9C'],
+    "Colorblind-Friendly": ['#0072B2', '#009E73', '#D55E00', '#CC79A7', '#56B4E9', '#F0E442', '#E69F00', '#000000'],
+    "High-Contrast": ['#000000', '#E69F00', '#56B4E9', '#009E73', '#CC79A7', '#D55E00', '#F0E442', '#0072B2'],
+    "Monochrome": ['#000000', '#333333', '#666666', '#999999', '#BBBBBB', '#DDDDDD', '#EEEEEE', '#FFFFFF'],
+    "Vibrant": ['#E63946', '#F4A261', '#2A9D8F', '#264653', '#E76F51', '#2EC4B6', '#CBF3F0', '#FFD93D'],
+    "Pastel": ['#FFB3BA', '#BAFFC9', '#BAE1FF', '#FFFFBA', '#FFD9BA', '#E6BEFF', '#FFB3E6', '#C9FFBA'],
+    "Earth Tones": ['#8B4513', '#A0522D', '#CD853F', '#D2B48C', '#F5DEB3', '#DEB887', '#BC8F8F', '#A0826D'],
+    "Ocean": ['#003f5c', '#2f4b7c', '#665191', '#a05195', '#d45087', '#f95d6a', '#ff7c43', '#ffa600'],
+    "Forest": ['#2d5016', '#4a7c2e', '#6ba847', '#8cd460', '#b8e986', '#7ec850', '#5aa33a', '#367e24'],
+    "Sunset": ['#FF6B6B', '#FFA07A', '#FFD93D', '#6BCF7F', '#4ECDC4', '#45B7D1', '#96CEB4', '#FECA57'],
+    "Royal": ['#5D3FD3', '#7B68EE', '#9370DB', '#BA55D3', '#DA70D6', '#EE82EE', '#DDA0DD', '#E6E6FA'],
+    "Tropical": ['#FF6F61', '#FFB347', '#87CEEB', '#20B2AA', '#98FB98', '#FFD700', '#FF69B4', '#8A2BE2'],
+    "Neon": ['#FF00FF', '#00FFFF', '#FF00AA', '#AA00FF', '#00FFAA', '#FFFF00', '#FFAA00', '#AAFF00'],
 }
-
-# Matplotlib sequential colormaps for continuous data
-MATPLOTLIB_CMAPS = ['viridis', 'plasma', 'inferno', 'magma', 'cividis', 'turbo', 'crest', 'flare', 'rocket', 'mako', 'icefire', 'vlag']
 
 CHART_TYPES = ["Grouped Bar", "Stacked Bar", "Line Plot", "Scatter Plot", "Box Plot", "3D Bar", "Error Band"]
 
@@ -104,42 +97,24 @@ with st.sidebar:
     azim = st.slider("Azimuth Angle", 0, 360, 45, 10, disabled=(not use_3d))
     
     st.subheader("🔤 Typography")
-    # Font family with Calibri and Times New Roman options
-    font_family_options = ["sans-serif", "serif", "monospace", "Calibri", "Times New Roman", "Arial", "Helvetica", "DejaVu Sans", "DejaVu Serif"]
-    font_family = st.selectbox("Font Family", font_family_options, index=0)
-    # Font size slider extended to 36
+    font_family = st.radio("Font Family", ["sans-serif", "serif", "monospace", "Calibri", "Times New Roman", "Arial", "Helvetica", "Verdana", "Georgia", "Courier New"], index=0)
     font_size_base = st.slider("Base Font Size", 8, 36, PUBLICATION_STYLES[pub_style]['font_size_base'], 1)
-    title_font_size = st.slider("Title Font Size", 10, 40, font_size_base + 2, 1)
-    label_font_size = st.slider("Axis Label Font Size", 8, 36, font_size_base + 1, 1)
-    tick_font_size = st.slider("Tick Label Font Size", 6, 30, font_size_base, 1)
     title_bold = st.checkbox("Bold Titles", value=True)
     label_italic = st.checkbox("Italic Axis Labels", value=False)
-    use_math_text = st.checkbox("Use Math Text for Axes", value=True)
     
     st.subheader("🎨 Color Scheme")
-    color_scheme_type = st.radio("Color Source", ["Categorical Palette", "Matplotlib Colormap"], index=0)
-    
-    if color_scheme_type == "Categorical Palette":
-        color_palette = st.selectbox("Color Palette", list(COLORBLIND_PALETTES.keys()))
-        custom_colors = {}
-        conditions = ['Ringer 7D', 'Ringer 1M', 'Standard 7D', 'Standard 1M']
-        default_palette = COLORBLIND_PALETTES[color_palette]
-        for i, cond in enumerate(conditions):
-            custom_colors[cond] = st.color_picker(cond, default_palette[i % len(default_palette)])
-    else:
-        selected_cmap = st.selectbox("Matplotlib Colormap", MATPLOTLIB_CMAPS)
-        cmap = plt.get_cmap(selected_cmap)
-        conditions = ['Ringer 7D', 'Ringer 1M', 'Standard 7D', 'Standard 1M']
-        custom_colors = {cond: mcolors.rgb2hex(cmap(i/(len(conditions)-1))) for i, cond in enumerate(conditions)}
-        st.write("🎨 Generated colors from colormap:")
-        for cond, color in custom_colors.items():
-            st.markdown(f"<span style='color:{color}'>●</span> {cond}: `{color}`", unsafe_allow_html=True)
+    color_palette = st.selectbox("Color Palette", list(COLORBLIND_PALETTES.keys()))
+    custom_colors = {}
+    conditions = ['Ringer 7D', 'Ringer 1M', 'Standard 7D', 'Standard 1M']
+    default_palette = COLORBLIND_PALETTES[color_palette]
+    for i, cond in enumerate(conditions):
+        custom_colors[cond] = st.color_picker(cond, default_palette[i % len(default_palette)])
     
     st.subheader("🖼️ Background & Frame")
     fig_bg = st.color_picker("Figure Background", PUBLICATION_STYLES[pub_style]['facecolor'])
     axes_bg = st.color_picker("Plot Area Background", "#FFFFFF")
-    frame_style = st.radio("Frame Style", ["Full Box", "Bottom-Left Only", "No Frame", "Origin Style (inward ticks)"], index=0)
-    frame_width = st.slider("Frame Line Width", 0.5, 2.5, 1.0, 0.1)
+    frame_style = st.radio("Frame Style", ["Full Box", "Bottom-Left Only", "No Frame"], index=0)
+    frame_width = st.slider("Frame Line Width", 0.5, 2.5, 0.8, 0.1)
     frame_color = st.color_picker("Frame Color", "#333333")
     
     st.subheader("📐 Grid Configuration")
@@ -147,131 +122,83 @@ with st.sidebar:
     if show_grid:
         grid_axis = st.radio("Grid Axis", ["Y-axis", "X-axis", "Both"], index=0)
         grid_style = st.selectbox("Grid Line Style", ["--", "-", ":", "-."], index=0)
-        grid_width = st.slider("Grid Width", 0.1, 2.0, 0.4, 0.1)
-        grid_alpha = st.slider("Grid Opacity", 0.0, 1.0, 0.3, 0.1)
+        grid_width = st.slider("Grid Width", 0.1, 2.0, 0.5, 0.1)
+        grid_alpha = st.slider("Grid Opacity", 0.0, 1.0, 0.4, 0.1)
         grid_color = st.color_picker("Grid Color", "#DDDDDD")
-        show_minor_grid = st.checkbox("Show Minor Grid Lines", value=True)
-        minor_grid_alpha = st.slider("Minor Grid Opacity", 0.0, 1.0, 0.15, 0.05)
+        show_minor_grid = st.checkbox("Show Minor Grid Lines", value=False)
     else:
-        grid_axis, grid_style, grid_width, grid_alpha, grid_color, show_minor_grid, minor_grid_alpha = "y", "--", 0.4, 0.3, "#DDDDDD", False, 0.15
+        grid_axis, grid_style, grid_width, grid_alpha, grid_color, show_minor_grid = "y", "--", 0.5, 0.4, "#DDDDDD", False
     
     st.subheader("📜 Legend")
     show_legend = st.checkbox("Show Legend", value=True)
+    legend_pos = "upper right"
+    legend_frame = False
+    legend_cols = 2
     if show_legend:
-        legend_pos = st.selectbox("Position", ["upper right", "upper left", "lower left", "lower right", "center right", "center left", "best", "outside right"], index=0)
+        legend_pos = st.selectbox("Position", ["upper right", "upper left", "lower left", "lower right", "center right", "best"], index=0)
         legend_frame = st.checkbox("Legend Frame", value=False)
-        legend_frame_alpha = st.slider("Legend Frame Opacity", 0.0, 1.0, 0.9, 0.1) if legend_frame else 1.0
         legend_cols = st.slider("Legend Columns", 1, 4, 2)
-        legend_font_size = st.slider("Legend Font Size", 6, 24, max(8, font_size_base - 2), 1)
-        legend_marker_scale = st.slider("Legend Marker Scale", 0.5, 3.0, 1.5, 0.1)
-    else:
-        legend_pos, legend_frame, legend_cols, legend_font_size, legend_marker_scale = "upper right", False, 2, 8, 1.5
     
     st.subheader("📈 Data Display")
     show_error_bars = st.checkbox("Show Error Bars", value=True)
-    error_cap_size = st.slider("Error Bar Cap Size", 2, 12, 5, 1)
-    error_bar_width = st.slider("Error Bar Line Width", 0.5, 2.5, 1.0, 0.1)
+    error_cap_size = st.slider("Error Bar Cap Size", 2, 8, 4, 1)
     show_data_labels = st.checkbox("Show Data Labels", value=False)
     label_precision = st.slider("Label Decimal Places", 1, 4, 3, 1)
-    label_font_size_data = st.slider("Data Label Font Size", 6, 20, max(7, font_size_base - 3), 1)
-    label_rotation = st.slider("Data Label Rotation", -90, 90, 0, 15)
     
     st.subheader("📏 Axis Configuration")
     y_log_scale = st.checkbox("Log Scale Y-Axis", value=False)
-    x_log_scale = st.checkbox("Log Scale X-Axis", value=False)
     auto_ylim = st.checkbox("Auto Y-Limits", value=True)
     y_min = st.number_input("Y-Axis Min", value=0.0, step=0.01, format="%.3f", disabled=auto_ylim)
     y_max = st.number_input("Y-Axis Max", value=2.5, step=0.01, format="%.3f", disabled=auto_ylim)
-    show_scientific_notation = st.checkbox("Scientific Notation for Large/Small Values", value=True)
-    offset_notation = st.checkbox("Use Offset Notation", value=True)
     
     st.subheader("✨ Advanced Styling")
     bar_hatch = st.selectbox("Bar Hatch Pattern", ["none", "/", "\\", "|", "-", "+", "x", "o", "O", ".", "*"], index=0)
-    bar_alpha = st.slider("Bar Transparency", 0.3, 1.0, 0.95, 0.05)
-    bar_edge_width = st.slider("Bar Edge Width", 0.0, 2.0, 0.6, 0.1)
-    bar_edge_color = st.color_picker("Bar Edge Color", "#FFFFFF")
-    marker_edge_width = st.slider("Marker Edge Width", 0.0, 2.0, 0.8, 0.1)
-    marker_edge_color = st.color_picker("Marker Edge Color", "#000000")
-    
-    # Origin Pro style enhancements
-    panel_labels = st.checkbox("Add Panel Labels (a), (b), (c)...", value=False)
-    watermark_text = st.text_input("Watermark Text (optional)", "")
-    watermark_alpha = st.slider("Watermark Opacity", 0.0, 1.0, 0.1, 0.05) if watermark_text else 0.0
-    
-    # Tick customization
-    tick_direction = st.radio("Tick Direction", ["in", "out", "inout"], index=0)
-    tick_length = st.slider("Major Tick Length", 2, 10, 4, 1)
-    minor_tick_length = st.slider("Minor Tick Length", 1, 6, 2, 1)
-    show_minor_ticks = st.checkbox("Show Minor Ticks", value=True)
+    bar_alpha = st.slider("Bar Transparency", 0.3, 1.0, 1.0, 0.1)
+    bar_edge_width = st.slider("Bar Edge Width", 0.0, 2.0, 0.4, 0.1)
     
     view_mode = st.radio("📋 View Mode", ["Individual Charts", "Combined Grid (2×3)"], index=0)
     
     st.subheader("💾 Export")
-    export_dpi = st.slider("Export DPI", 150, 1200, PUBLICATION_STYLES[pub_style]['dpi'], 50)
-    export_format = st.selectbox("Preferred Format Info", ["PNG (raster)", "PDF (vector)", "SVG (vector)", "EPS (vector)"], index=1)
+    export_dpi = st.slider("Export DPI", 150, 600, PUBLICATION_STYLES[pub_style]['dpi'], 50)
     if st.button("📥 Export Tips"):
-        st.info("💡 **Pro Tips:**\n\n• Right-click any chart > 'Save Image As' for PNG\n• Use browser Print (Ctrl+P) > 'Save as PDF' for vector quality\n• For publication: use 600+ DPI for raster, or PDF/SVG for vector\n• Origin Pro style: use serif fonts + inward ticks + subtle grid")
+        st.info("Right-click any chart > 'Save Image As' or use your browser's Print (Ctrl+P) > 'Save as PDF' for vector quality.")
 
-# ── Apply Publication Style (Origin Pro Inspired) ───────────────────────────
+# ── Apply Publication Style ─────────────────────────────────────────────────
 style = PUBLICATION_STYLES[pub_style]
 
-# Font mapping for Calibri and Times New Roman
-font_mapping = {
-    "Calibri": ["Calibri", "sans-serif"],
-    "Times New Roman": ["Times New Roman", "serif"],
-    "Arial": ["Arial", "sans-serif"],
-    "Helvetica": ["Helvetica", "sans-serif"],
-    "DejaVu Sans": ["DejaVu Sans", "sans-serif"],
-    "DejaVu Serif": ["DejaVu Serif", "serif"]
-}
-
-# Determine actual font family for matplotlib
-if font_family in font_mapping:
-    mpl_font_family = font_mapping[font_family][0]
-    mpl_font_generic = font_mapping[font_family][1]
+# Determine actual font family to use
+if font_family in ['Calibri', 'Times New Roman', 'Arial', 'Helvetica', 'Verdana', 'Georgia', 'Courier New']:
+    actual_font_family = font_family
+elif font_family in ['sans-serif', 'serif', 'monospace']:
+    actual_font_family = font_family if pub_style == "Default" else style['font_family']
 else:
-    mpl_font_family = font_family if font_family in ["sans-serif", "serif", "monospace"] else "sans-serif"
-    mpl_font_generic = font_family if font_family in ["sans-serif", "serif", "monospace"] else "sans-serif"
+    actual_font_family = style['font_family']
 
-# Update matplotlib rcParams with Origin Pro inspired settings
 plt.rcParams.update({
-    'font.family': mpl_font_family if font_family in font_mapping else (font_family if font_family in ["sans-serif", "serif", "monospace"] else style['font_family']),
-    'font.sans-serif': ['Calibri', 'Arial', 'DejaVu Sans', 'Helvetica', 'Liberation Sans', 'sans-serif'],
-    'font.serif': ['Times New Roman', 'STIX', 'DejaVu Serif', 'serif'],
-    'font.monospace': ['Consolas', 'DejaVu Sans Mono', 'monospace'],
+    'font.family': actual_font_family,
+    'font.sans-serif': ['Calibri', 'Arial', 'DejaVu Sans', 'Helvetica', 'Liberation Sans', 'Verdana'],
+    'font.serif': ['Times New Roman', 'STIX', 'DejaVu Serif', 'Georgia'],
+    'font.monospace': ['Courier New', 'DejaVu Mono', 'Consolas', 'Monaco'],
     'font.size': font_size_base,
-    'axes.linewidth': frame_width,
-    'axes.labelsize': label_font_size,
-    'axes.titlesize': title_font_size,
-    'axes.titleweight': 'bold' if title_bold else 'normal',
-    'axes.labelweight': 'bold' if label_italic else 'normal',
-    'xtick.labelsize': tick_font_size,
-    'ytick.labelsize': tick_font_size,
-    'xtick.major.width': frame_width,
-    'ytick.major.width': frame_width,
-    'xtick.major.size': tick_length,
-    'ytick.major.size': tick_length,
-    'xtick.minor.size': minor_tick_length if show_minor_ticks else 0,
-    'ytick.minor.size': minor_tick_length if show_minor_ticks else 0,
-    'xtick.minor.visible': show_minor_ticks,
-    'ytick.minor.visible': show_minor_ticks,
-    'xtick.direction': tick_direction,
-    'ytick.direction': tick_direction,
-    'axes.spines.top': frame_style in ["Full Box", "Origin Style (inward ticks)"],
-    'axes.spines.right': frame_style in ["Full Box", "Origin Style (inward ticks)"],
+    'axes.linewidth': style['line_width'],
+    'xtick.major.width': style['line_width'],
+    'ytick.major.width': style['line_width'],
+    'xtick.major.size': 4,
+    'ytick.major.size': 4,
+    'xtick.direction': 'in',
+    'ytick.direction': 'in',
+    'axes.spines.top': frame_style == "Full Box",
+    'axes.spines.right': frame_style == "Full Box",
     'axes.spines.left': frame_style != "No Frame",
     'axes.spines.bottom': frame_style != "No Frame",
     'figure.facecolor': fig_bg,
     'axes.facecolor': axes_bg,
     'figure.dpi': export_dpi,
     'savefig.dpi': export_dpi,
-    'savefig.bbox': 'tight',
-    'savefig.pad_inches': 0.1,
-    'axes.prop_cycle': plt.cycler(color=list(COLORBLIND_PALETTES["Origin Default"])),
 })
 
-# ── Plot Generation Helper (Origin Pro Quality) ─────────────────────────────
-def render_chart(ax, element, cond_data, chart_type, use_3d=False, is_combined=False, panel_label=None):
+# ── Plot Generation Helper ──────────────────────────────────────────────────
+def render_chart(ax, element, cond_data, chart_type, use_3d=False, is_combined=False):
     x_positions = np.arange(len(samples))
     plot_data = {}
     for cond in conditions:
@@ -292,14 +219,8 @@ def render_chart(ax, element, cond_data, chart_type, use_3d=False, is_combined=F
     bar_w = 0.18
     offsets = np.arange(n_cond) * bar_w - (n_cond - 1) * bar_w / 2
     
-    # Panel label for multi-panel figures (Origin Pro style)
-    if panel_label and is_combined:
-        ax.text(-0.15, 1.05, f'{panel_label})', transform=ax.transAxes, 
-               fontsize=title_font_size, fontweight='bold', va='bottom', ha='right')
-    
     # ── 3D Bar Rendering ────────────────────────────────────────────────
     if chart_type == "3D Bar" and use_3d:
-        from mpl_toolkits.mplot3d import Axes3D
         for i, cond in enumerate(detected_conditions):
             vals, errs = plot_data[cond]
             valid_mask = ~np.isnan(vals)
@@ -312,16 +233,14 @@ def render_chart(ax, element, cond_data, chart_type, use_3d=False, is_combined=F
             dy = np.full_like(xs, 0.8)
             dz = vals[valid_mask]
             ax.bar3d(xs, ys, zs, dx, dy, dz, color=custom_colors[cond], 
-                     alpha=bar_alpha, edgecolor=bar_edge_color, linewidth=bar_edge_width)
+                     alpha=bar_alpha, edgecolor='white', linewidth=bar_edge_width)
         ax.set_xticks(x_positions)
-        # Keep x-axis labels horizontal and unchanged
-        ax.set_xticklabels(sample_labels, fontsize=tick_font_size, rotation=0, ha='center')
+        ax.set_xticklabels(sample_labels, fontsize=font_size_base)
         ax.set_yticks(np.arange(n_cond))
-        ax.set_yticklabels(detected_conditions, fontsize=tick_font_size)
-        ax.set_zlabel('Ion release (μg·cm⁻²)', fontsize=label_font_size, fontstyle='italic' if label_italic else 'normal', labelpad=8)
-        ax.set_title(f'{element} ion release', fontsize=title_font_size, fontweight='bold' if title_bold else 'normal', pad=15)
+        ax.set_yticklabels(detected_conditions, fontsize=font_size_base-1)
+        ax.set_zlabel('Ion release (μg·cm⁻²)', fontsize=font_size_base+1)
+        ax.set_title(f'{element} ion release', fontsize=font_size_base+2, fontweight='bold' if title_bold else 'normal')
         ax.view_init(elev=elev, azim=azim)
-        ax.tick_params(axis='both', which='major', direction=tick_direction, length=tick_length, width=frame_width)
         return
     
     # ── 2D Chart Rendering ──────────────────────────────────────────────
@@ -332,23 +251,20 @@ def render_chart(ax, element, cond_data, chart_type, use_3d=False, is_combined=F
             if not np.any(valid_mask):
                 continue
             x_valid = x_positions[valid_mask] + offsets[i]
-            bars = ax.bar(x_valid, vals[valid_mask], width=bar_w,
+            ax.bar(x_valid, vals[valid_mask], width=bar_w,
                    color=custom_colors[cond], label=cond, zorder=3,
-                   edgecolor=bar_edge_color, linewidth=bar_edge_width, alpha=bar_alpha,
+                   edgecolor='white' if bar_edge_width > 0 else 'none',
+                   linewidth=bar_edge_width, alpha=bar_alpha,
                    hatch=bar_hatch if bar_hatch != "none" else None)
-            for bar in bars:
-                bar.set_edgecolor(bar_edge_color)
-                bar.set_linewidth(bar_edge_width)
             if show_error_bars:
                 ax.errorbar(x_valid, vals[valid_mask], yerr=errs[valid_mask],
-                           fmt='none', ecolor=frame_color, elinewidth=error_bar_width,
-                           capsize=error_cap_size, capthick=error_bar_width, zorder=4)
+                           fmt='none', ecolor='#444', elinewidth=style['line_width'],
+                           capsize=error_cap_size, capthick=style['line_width'], zorder=4)
             if show_data_labels:
                 for x_pos, val in zip(x_valid, vals[valid_mask]):
                     if not np.isnan(val) and val > 0:
                         ax.text(x_pos, val + 0.02, f'{val:.{label_precision}f}',
-                               ha='center', va='bottom', fontsize=label_font_size_data, rotation=label_rotation,
-                               fontweight='normal', color=frame_color)
+                               ha='center', va='bottom', fontsize=font_size_base-2, rotation=90)
     
     elif chart_type == "Stacked Bar":
         bottom = np.zeros(len(samples))
@@ -356,52 +272,47 @@ def render_chart(ax, element, cond_data, chart_type, use_3d=False, is_combined=F
             vals, errs = plot_data[cond]
             valid_mask = ~np.isnan(vals)
             plot_vals = np.where(valid_mask, vals, 0)
-            bars = ax.bar(x_positions, plot_vals, bottom=bottom,
+            ax.bar(x_positions, plot_vals, bottom=bottom,
                    color=custom_colors[cond], label=cond, zorder=3,
-                   edgecolor=bar_edge_color, linewidth=bar_edge_width, alpha=bar_alpha,
+                   edgecolor='white' if bar_edge_width > 0 else 'none',
+                   linewidth=bar_edge_width, alpha=bar_alpha,
                    hatch=bar_hatch if bar_hatch != "none" else None)
-            for bar in bars:
-                bar.set_edgecolor(bar_edge_color)
-                bar.set_linewidth(bar_edge_width)
             bottom += plot_vals
             if show_error_bars and np.any(valid_mask):
                 ax.errorbar(x_positions[valid_mask], bottom[valid_mask] - errs[valid_mask]/2,
-                           yerr=errs[valid_mask], fmt='none', ecolor=frame_color,
-                           elinewidth=error_bar_width, capsize=error_cap_size, zorder=4)
+                           yerr=errs[valid_mask], fmt='none', ecolor='#444',
+                           elinewidth=style['line_width'], capsize=error_cap_size, zorder=4)
     
     elif chart_type == "Line Plot":
-        markers = ['o', 's', '^', 'D', 'v', '<', '>', 'p', '*', 'h']
+        markers = ['o', 's', '^', 'D', 'v', '<', '>', 'p']
         for i, cond in enumerate(detected_conditions):
             vals, errs = plot_data[cond]
             valid_mask = ~np.isnan(vals)
             if not np.any(valid_mask):
                 continue
-            line, = ax.plot(x_positions[valid_mask], vals[valid_mask],
-                   marker=markers[i % len(markers)], markersize=style['marker_size'] + 1,
-                   label=cond, color=custom_colors[cond], linewidth=style['line_width']*1.5,
-                   markeredgecolor=marker_edge_color, markeredgewidth=marker_edge_width,
-                   markerfacecolor=custom_colors[cond])
+            ax.plot(x_positions[valid_mask], vals[valid_mask],
+                   marker=markers[i % len(markers)], markersize=style['marker_size'],
+                   label=cond, color=custom_colors[cond], linewidth=style['line_width']*1.5)
             if show_error_bars:
                 ax.errorbar(x_positions[valid_mask], vals[valid_mask], yerr=errs[valid_mask],
-                           fmt='none', ecolor=custom_colors[cond], elinewidth=error_bar_width,
-                           capsize=error_cap_size, alpha=0.8, capthick=error_bar_width)
+                           fmt='none', ecolor=custom_colors[cond], elinewidth=style['line_width'],
+                           capsize=error_cap_size, alpha=0.8)
     
     elif chart_type == "Scatter Plot":
-        markers = ['o', 's', '^', 'D', 'v', '<', '>', 'p', '*', 'h']
+        markers = ['o', 's', '^', 'D', 'v', '<', '>', 'p']
         for i, cond in enumerate(detected_conditions):
             vals, errs = plot_data[cond]
             valid_mask = ~np.isnan(vals)
             if not np.any(valid_mask):
                 continue
-            jitter = np.random.RandomState(42 + i).normal(0, 0.02, size=np.sum(valid_mask))
+            jitter = np.random.RandomState(42).normal(0, 0.03, size=np.sum(valid_mask))
             ax.scatter(x_positions[valid_mask] + jitter, vals[valid_mask],
-                      marker=markers[i % len(markers)], s=(style['marker_size']+2)*20,
-                      label=cond, color=custom_colors[cond], alpha=bar_alpha, 
-                      edgecolors=marker_edge_color, linewidths=marker_edge_width)
+                      marker=markers[i % len(markers)], s=style['marker_size']*15,
+                      label=cond, color=custom_colors[cond], alpha=0.7, edgecolors='white', linewidth=0.5)
             if show_error_bars:
                 ax.errorbar(x_positions[valid_mask], vals[valid_mask], yerr=errs[valid_mask],
-                           fmt='none', ecolor=custom_colors[cond], elinewidth=error_bar_width,
-                           capsize=error_cap_size, alpha=0.7, capthick=error_bar_width)
+                           fmt='none', ecolor=custom_colors[cond], elinewidth=style['line_width'],
+                           capsize=error_cap_size, alpha=0.6)
     
     elif chart_type == "Box Plot":
         box_data = []
@@ -413,17 +324,11 @@ def render_chart(ax, element, cond_data, chart_type, use_3d=False, is_combined=F
                 box_data.append(valid_vals)
                 box_labels.append(cond)
         if box_data:
-            bp = ax.boxplot(box_data, labels=box_labels, patch_artist=True, widths=0.6, showfliers=False,
-                           medianprops=dict(color='black', linewidth=1.5),
-                           boxprops=dict(linewidth=frame_width),
-                           whiskerprops=dict(linewidth=frame_width),
-                           capprops=dict(linewidth=frame_width, capsize=error_cap_size))
+            bp = ax.boxplot(box_data, labels=box_labels, patch_artist=True, widths=0.6, showfliers=False)
             for patch, cond in zip(bp['boxes'], box_labels):
                 patch.set_facecolor(custom_colors[cond])
                 patch.set_alpha(bar_alpha)
-                patch.set_edgecolor(bar_edge_color)
-                patch.set_linewidth(bar_edge_width)
-            ax.set_xticklabels(box_labels, rotation=0, ha='center', fontsize=tick_font_size)
+            ax.set_xticklabels(box_labels, rotation=45, ha='right', fontsize=font_size_base-1)
     
     elif chart_type == "Error Band":
         for i, cond in enumerate(detected_conditions):
@@ -432,49 +337,34 @@ def render_chart(ax, element, cond_data, chart_type, use_3d=False, is_combined=F
             if not np.any(valid_mask):
                 continue
             x_valid = x_positions[valid_mask]
-            ax.plot(x_valid, vals[valid_mask], label=cond, color=custom_colors[cond], 
-                   linewidth=style['line_width']*1.5, marker='o', markersize=style['marker_size'],
-                   markeredgecolor=marker_edge_color, markeredgewidth=marker_edge_width)
+            ax.plot(x_valid, vals[valid_mask], label=cond, color=custom_colors[cond], linewidth=style['line_width']*1.5)
             ax.fill_between(x_valid, np.maximum(0, vals[valid_mask] - errs[valid_mask]),
-                           vals[valid_mask] + errs[valid_mask], color=custom_colors[cond], alpha=0.2, label=None)
+                           vals[valid_mask] + errs[valid_mask], color=custom_colors[cond], alpha=0.2)
 
-    # ── Axis Configuration (Origin Pro Style) ────────────────────────────
+    # ── Axis Configuration ───────────────────────────────────────────────
     ax.set_xticks(x_positions)
-    # Keep x-axis sample labels horizontal and unchanged - NO ROTATION
-    ax.set_xticklabels(sample_labels, fontsize=tick_font_size, rotation=0, ha='center')
-    ax.set_ylabel('Ion release (μg·cm⁻²)', fontsize=label_font_size, fontstyle='italic' if label_italic else 'normal', labelpad=8)
-    ax.set_xlabel('Sample ID', fontsize=label_font_size, fontstyle='italic' if label_italic else 'normal', labelpad=8)
-    ax.set_title(f'{element} ion release', fontsize=title_font_size, fontweight='bold' if title_bold else 'normal', pad=15, loc='left')
+    ax.set_xticklabels(sample_labels, fontsize=font_size_base)
+    ax.set_ylabel('Ion release (μg·cm⁻²)', fontsize=font_size_base+1, fontstyle='italic' if label_italic else 'normal')
+    ax.set_title(f'{element} ion release', fontsize=font_size_base+2, fontweight='bold' if title_bold else 'normal', pad=12)
     
     if not auto_ylim:
         ax.set_ylim(y_min, y_max)
     if y_log_scale and chart_type not in ["Box Plot"]:
         ax.set_yscale('log')
-    if x_log_scale:
-        ax.set_xscale('log')
+        ax.yaxis.set_major_locator(MaxNLocator(nbins=6))
     
-    # Scientific notation and offset formatting
-    if show_scientific_notation or offset_notation:
-        ax.yaxis.set_major_formatter(ScalarFormatter(useMathText=use_math_text, useOffset=offset_notation))
-        ax.yaxis.major.formatter.set_powerlimits((-3, 4))
-        ax.xaxis.set_major_formatter(ScalarFormatter(useMathText=use_math_text, useOffset=offset_notation))
-    
-    ax.yaxis.set_major_locator(MaxNLocator(nbins=6, prune='lower'))
-    if show_minor_ticks:
-        ax.yaxis.set_minor_locator(AutoMinorLocator(5))
-        ax.xaxis.set_minor_locator(AutoMinorLocator(2))
-    
-    # ── Grid Configuration (Origin Pro Style) ────────────────────────────
+    # ── Grid Configuration ───────────────────────────────────────────────
     if show_grid and frame_style != "No Frame":
         axis_map = {"Y-axis": "y", "X-axis": "x", "Both": "both"}
         ax.grid(True, axis=axis_map[grid_axis], linestyle=grid_style, linewidth=grid_width, alpha=grid_alpha, color=grid_color, zorder=0)
-        if show_minor_grid and show_minor_ticks:
-            ax.grid(which='minor', axis=axis_map[grid_axis], linestyle=':', linewidth=grid_width*0.5, alpha=minor_grid_alpha, color=grid_color, zorder=0)
+        if show_minor_grid:
+            ax.minorticks_on()
+            ax.grid(which='minor', axis=axis_map[grid_axis], linestyle=':', linewidth=grid_width*0.5, alpha=grid_alpha*0.5, color=grid_color, zorder=0)
     else:
         ax.grid(False)
     ax.set_axisbelow(True)
     
-    # ── Frame Styling (Origin Pro: inward ticks, clean spines) ───────────
+    # ── Frame Styling ────────────────────────────────────────────────────
     if frame_style != "No Frame":
         for spine_name, spine in ax.spines.items():
             if frame_style == "Full Box" or spine_name in ['left', 'bottom']:
@@ -484,104 +374,67 @@ def render_chart(ax, element, cond_data, chart_type, use_3d=False, is_combined=F
             else:
                 spine.set_visible(False)
     
-    # ── Legend Configuration (Origin Pro Style) ──────────────────────────
+    # ── Legend Configuration ─────────────────────────────────────────────
     if show_legend and detected_conditions:
-        handles = [mpatches.Patch(color=custom_colors[c], label=c, edgecolor=bar_edge_color, linewidth=0.5) for c in detected_conditions]
-        if legend_pos == "outside right":
-            ax.legend(handles=handles, frameon=legend_frame, fontsize=legend_font_size,
-                     loc='center left', bbox_to_anchor=(1.02, 0.5), ncol=1, 
-                     handlelength=1.8, handleheight=legend_marker_scale, framealpha=legend_frame_alpha)
-        else:
-            ax.legend(handles=handles, frameon=legend_frame, fontsize=legend_font_size,
-                     loc=legend_pos, ncol=legend_cols, handlelength=1.8, 
-                     handleheight=legend_marker_scale, framealpha=legend_frame_alpha)
-    
-    # ── Watermark (Origin Pro style subtle branding) ─────────────────────
-    if watermark_text and watermark_alpha > 0:
-        ax.text(0.5, 0.5, watermark_text, transform=ax.transAxes,
-               fontsize=font_size_base*3, color=frame_color, alpha=watermark_alpha,
-               ha='center', va='center', rotation=30, fontweight='bold')
+        handles = [mpatches.Patch(color=custom_colors[c], label=c) for c in detected_conditions]
+        ax.legend(handles=handles, frameon=legend_frame, fontsize=font_size_base-1,
+                 loc=legend_pos, ncol=legend_cols, handlelength=1.5, handleheight=1)
     
     # ── Annotation for Partial Detection ─────────────────────────────────
     if element in ('Al', 'Si'):
-        ax.text(0.99, 0.02, '* n.d. = not detected', transform=ax.transAxes,
-               fontsize=max(7, tick_font_size-2), ha='right', va='bottom', color='gray',
-               bbox=dict(boxstyle='round,pad=0.3', facecolor=axes_bg, alpha=0.7, edgecolor=frame_color, linewidth=0.5))
+        ax.text(0.99, 0.97, '* n.d. = not detected', transform=ax.transAxes,
+               fontsize=font_size_base-2, ha='right', va='top', color='gray',
+               bbox=dict(boxstyle='round,pad=0.3', facecolor=axes_bg, alpha=0.8, edgecolor=frame_color))
 
 # ── Streamlit Rendering ─────────────────────────────────────────────────────
 elements_to_plot = list(data.keys())
-conditions = ['Ringer 7D', 'Ringer 1M', 'Standard 7D', 'Standard 1M']
 
 if view_mode == "Individual Charts":
-    for idx, element in enumerate(elements_to_plot):
+    for element in elements_to_plot:
         with st.expander(f"📊 {element} Ion Release", expanded=True):
             if chart_type == "3D Bar" and use_3d:
-                fig = plt.figure(figsize=(12, 8), facecolor=fig_bg)
-                ax = fig.add_subplot(111, projection='3d', facecolor=axes_bg)
+                fig = plt.figure(figsize=(11, 7))
+                ax = fig.add_subplot(111, projection='3d')
             else:
-                fig, ax = plt.subplots(figsize=(12, 7), facecolor=fig_bg)
-                ax.set_facecolor(axes_bg)
+                fig, ax = plt.subplots(figsize=(11, 6))
             
-            render_chart(ax, element, data[element], chart_type, use_3d, is_combined=False, panel_label=None)
+            render_chart(ax, element, data[element], chart_type, use_3d, is_combined=False)
             plt.tight_layout()
-            st.pyplot(fig, use_container_width=True, bbox_inches='tight')
+            st.pyplot(fig, use_container_width=True)
             plt.close(fig)
 else:
     st.subheader("📋 Combined Element Overview")
     if chart_type == "3D Bar" and use_3d:
-        st.warning("⚠️ 3D charts work best in individual view. Rendering 2D fallback for grid view.")
+        st.warning("3D charts work best in individual view. Rendering 2D fallback for grid view.")
         current_use_3d = False
     else:
         current_use_3d = use_3d
     
-    fig = plt.figure(figsize=(20, 14), facecolor=fig_bg)
+    fig, axes = plt.subplots(2, 3, figsize=(18, 12))
+    axes_flat = axes.flatten()
     
     for idx, element in enumerate(elements_to_plot):
+        ax = axes_flat[idx]
         if chart_type == "3D Bar" and current_use_3d:
-            ax = fig.add_subplot(2, 3, idx+1, projection='3d', facecolor=axes_bg)
-        else:
-            ax = fig.add_subplot(2, 3, idx+1, facecolor=axes_bg)
-        ax.set_facecolor(axes_bg)
-        panel_label = chr(97 + idx) if panel_labels else None
-        render_chart(ax, element, data[element], chart_type, current_use_3d, is_combined=True, panel_label=panel_label)
+            ax = fig.add_subplot(2, 3, idx+1, projection='3d')
+        render_chart(ax, element, data[element], chart_type, current_use_3d, is_combined=True)
     
-    for idx in range(len(elements_to_plot), 6):
-        ax = fig.add_subplot(2, 3, idx+1)
+    for ax in axes_flat[len(elements_to_plot):]:
         ax.axis('off')
     
-    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-    st.pyplot(fig, use_container_width=True, bbox_inches='tight')
+    plt.tight_layout()
+    st.pyplot(fig, use_container_width=True)
     plt.close(fig)
 
 # ── Footer & Export Info ────────────────────────────────────────────────────
 st.divider()
-col1, col2, col3, col4 = st.columns(4)
+col1, col2, col3 = st.columns(3)
 with col1:
     st.metric("Elements", len(elements_to_plot))
 with col2:
     st.metric("Samples", len(samples))
 with col3:
     st.metric("Conditions", len(conditions))
-with col4:
-    st.metric("Font Size", f"{font_size_base}pt")
 
-st.caption(f"🎨 Style: {pub_style} | 🔤 Font: {font_family} ({font_size_base}pt) | 📊 Type: {chart_type} | 🧊 3D: {'Yes' if use_3d else 'No'} | 📐 DPI: {export_dpi} | 🖼️ Format: {export_format}")
-
-with st.expander("📖 Origin Pro Style Guide"):
-    st.markdown("""
-    **✅ Publication-Ready Settings Applied:**
-    - 🔹 **Fonts**: Calibri/Times New Roman support, sizes up to 36pt
-    - 🔹 **Colors**: 13+ palettes including Origin Default, Colorblind-Friendly, Viridis, Tableau
-    - 🔹 **Ticks**: Inward direction, minor ticks, customizable length
-    - 🔹 **Grid**: Subtle major/minor grid with opacity control
-    - 🔹 **Frames**: Origin-style spine configuration
-    - 🔹 **Legends**: Outside positioning, marker scaling, frame opacity
-    - 🔹 **Export**: Up to 1200 DPI, vector format support (PDF/SVG/EPS)
-    - 🔹 **Panels**: Automatic (a), (b), (c) labeling for multi-figure layouts
-    - 🔹 **Annotations**: Scientific notation, offset formatting, watermark support
-    - 🔹 **X-Axis**: Sample labels kept horizontal and unchanged (no rotation)
-    
-    **💡 Pro Tip**: For Nature/Science submissions, use: *Serif font + 9-10pt base + 600 DPI + inward ticks + subtle grid*
-    """)
-
-st.success("✅ Charts rendered with Origin Pro-inspired publication quality. Right-click to save or use Print > Save as PDF for vector output.")
+st.caption(f"🎨 Style: {pub_style} | 📊 Type: {chart_type} | 🧊 3D: {'Yes' if use_3d else 'No'} | 📐 DPI: {export_dpi}")
+st.success("✅ Charts rendered successfully. Use your browser's print function or right-click charts to save.")
