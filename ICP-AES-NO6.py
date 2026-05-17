@@ -5,7 +5,6 @@ import matplotlib.colors as mcolors
 import numpy as np
 import warnings
 from matplotlib.ticker import MaxNLocator, ScalarFormatter, AutoMinorLocator
-from matplotlib import rcParams
 
 # Suppress non-critical matplotlib deprecation warnings
 warnings.filterwarnings('ignore', category=UserWarning, module='matplotlib')
@@ -175,7 +174,7 @@ with st.sidebar:
     show_data_labels = st.checkbox("Show Data Labels", value=False)
     label_precision = st.slider("Label Decimal Places", 1, 4, 3, 1)
     label_font_size_data = st.slider("Data Label Font Size", 6, 20, max(7, font_size_base - 3), 1)
-    label_rotation = st.slider("Data Label Rotation", -90, 90, 90, 15)
+    label_rotation = st.slider("Data Label Rotation", -90, 90, 0, 15)
     
     st.subheader("📏 Axis Configuration")
     y_log_scale = st.checkbox("Log Scale Y-Axis", value=False)
@@ -315,7 +314,8 @@ def render_chart(ax, element, cond_data, chart_type, use_3d=False, is_combined=F
             ax.bar3d(xs, ys, zs, dx, dy, dz, color=custom_colors[cond], 
                      alpha=bar_alpha, edgecolor=bar_edge_color, linewidth=bar_edge_width)
         ax.set_xticks(x_positions)
-        ax.set_xticklabels(sample_labels, fontsize=tick_font_size, rotation=45, ha='right')
+        # Keep x-axis labels horizontal and unchanged
+        ax.set_xticklabels(sample_labels, fontsize=tick_font_size, rotation=0, ha='center')
         ax.set_yticks(np.arange(n_cond))
         ax.set_yticklabels(detected_conditions, fontsize=tick_font_size)
         ax.set_zlabel('Ion release (μg·cm⁻²)', fontsize=label_font_size, fontstyle='italic' if label_italic else 'normal', labelpad=8)
@@ -336,7 +336,6 @@ def render_chart(ax, element, cond_data, chart_type, use_3d=False, is_combined=F
                    color=custom_colors[cond], label=cond, zorder=3,
                    edgecolor=bar_edge_color, linewidth=bar_edge_width, alpha=bar_alpha,
                    hatch=bar_hatch if bar_hatch != "none" else None)
-            # Add marker-style edges to bars for Origin Pro look
             for bar in bars:
                 bar.set_edgecolor(bar_edge_color)
                 bar.set_linewidth(bar_edge_width)
@@ -424,7 +423,7 @@ def render_chart(ax, element, cond_data, chart_type, use_3d=False, is_combined=F
                 patch.set_alpha(bar_alpha)
                 patch.set_edgecolor(bar_edge_color)
                 patch.set_linewidth(bar_edge_width)
-            ax.set_xticklabels(box_labels, rotation=45, ha='right', fontsize=tick_font_size)
+            ax.set_xticklabels(box_labels, rotation=0, ha='center', fontsize=tick_font_size)
     
     elif chart_type == "Error Band":
         for i, cond in enumerate(detected_conditions):
@@ -441,7 +440,8 @@ def render_chart(ax, element, cond_data, chart_type, use_3d=False, is_combined=F
 
     # ── Axis Configuration (Origin Pro Style) ────────────────────────────
     ax.set_xticks(x_positions)
-    ax.set_xticklabels(sample_labels, fontsize=tick_font_size, rotation=45, ha='right')
+    # Keep x-axis sample labels horizontal and unchanged - NO ROTATION
+    ax.set_xticklabels(sample_labels, fontsize=tick_font_size, rotation=0, ha='center')
     ax.set_ylabel('Ion release (μg·cm⁻²)', fontsize=label_font_size, fontstyle='italic' if label_italic else 'normal', labelpad=8)
     ax.set_xlabel('Sample ID', fontsize=label_font_size, fontstyle='italic' if label_italic else 'normal', labelpad=8)
     ax.set_title(f'{element} ion release', fontsize=title_font_size, fontweight='bold' if title_bold else 'normal', pad=15, loc='left')
@@ -487,7 +487,6 @@ def render_chart(ax, element, cond_data, chart_type, use_3d=False, is_combined=F
     # ── Legend Configuration (Origin Pro Style) ──────────────────────────
     if show_legend and detected_conditions:
         handles = [mpatches.Patch(color=custom_colors[c], label=c, edgecolor=bar_edge_color, linewidth=0.5) for c in detected_conditions]
-        # Handle outside legend positioning
         if legend_pos == "outside right":
             ax.legend(handles=handles, frameon=legend_frame, fontsize=legend_font_size,
                      loc='center left', bbox_to_anchor=(1.02, 0.5), ncol=1, 
@@ -543,16 +542,14 @@ else:
         else:
             ax = fig.add_subplot(2, 3, idx+1, facecolor=axes_bg)
         ax.set_facecolor(axes_bg)
-        # Add panel label (a), (b), (c)... for Origin Pro multi-panel style
         panel_label = chr(97 + idx) if panel_labels else None
         render_chart(ax, element, data[element], chart_type, current_use_3d, is_combined=True, panel_label=panel_label)
     
-    # Hide unused subplots
     for idx in range(len(elements_to_plot), 6):
         ax = fig.add_subplot(2, 3, idx+1)
         ax.axis('off')
     
-    plt.tight_layout(rect=[0, 0.03, 1, 0.95])  # Leave room for suptitle if needed
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
     st.pyplot(fig, use_container_width=True, bbox_inches='tight')
     plt.close(fig)
 
@@ -570,7 +567,6 @@ with col4:
 
 st.caption(f"🎨 Style: {pub_style} | 🔤 Font: {font_family} ({font_size_base}pt) | 📊 Type: {chart_type} | 🧊 3D: {'Yes' if use_3d else 'No'} | 📐 DPI: {export_dpi} | 🖼️ Format: {export_format}")
 
-# Quick style reference
 with st.expander("📖 Origin Pro Style Guide"):
     st.markdown("""
     **✅ Publication-Ready Settings Applied:**
@@ -583,6 +579,7 @@ with st.expander("📖 Origin Pro Style Guide"):
     - 🔹 **Export**: Up to 1200 DPI, vector format support (PDF/SVG/EPS)
     - 🔹 **Panels**: Automatic (a), (b), (c) labeling for multi-figure layouts
     - 🔹 **Annotations**: Scientific notation, offset formatting, watermark support
+    - 🔹 **X-Axis**: Sample labels kept horizontal and unchanged (no rotation)
     
     **💡 Pro Tip**: For Nature/Science submissions, use: *Serif font + 9-10pt base + 600 DPI + inward ticks + subtle grid*
     """)
