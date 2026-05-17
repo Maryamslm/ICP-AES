@@ -11,3 +11,5 @@
 
 
 [![Static Badge](https://img.shields.io/badge/ICP-AES-v6.0-brightgreen.svg)](https://icp-aesno5-e6n3ph9kwtcnpkrdtjjgzp.streamlit.app/) (More plot design option)
+
+[![Static Badge](https://img.shields.io/badge/ICP-AES-v6.0-brightgreen.svg)]([https://icp-aesno5-e6n3ph9kwtcnpkrdtjjgzp.streamlit.app/](https://icp-aes-no6py-gjcixkanxoa56dtuykv7e8.streamlit.app/) (fontsize)
